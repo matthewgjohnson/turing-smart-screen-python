@@ -1,0 +1,1047 @@
+# Shiro System Theme v2.0
+# Based on design reference: shiro-system-design-reference.md
+#
+# KEY CHANGES:
+# - All titles/badges: Y=50 with lm anchor (vertically centered in header)
+# - Zones 1-3: Labels la at row_start+15, bars at row_end-35, hero baseline at bar_top-15
+# - Zone 4: Values rm at row center, labels lb at baseline
+# - Font: Barlow (was Roboto)
+# - Grid: Zones 1-3 use 95px rows, Zone 4 uses 75px rows with dual headers
+
+display:
+  DISPLAY_SIZE: 8.8"
+  DISPLAY_ORIENTATION: landscape
+
+static_images:
+  BACKGROUND:
+    PATH: background.png
+    X: 0
+    Y: 0
+
+static_text:
+  # =========================================================================
+  # ZONE 1: GPU0 (X=0-479)
+  # Header Y=50 (lm), Labels Y=95/190/285/380 (la), Units baseline-aligned with hero
+  # =========================================================================
+  GPU0_TITLE:
+    TEXT: "GPU0"
+    X: 20
+    Y: 52
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 48
+    FONT_COLOR: 0, 0, 0
+    ANCHOR: lm
+
+  GPU0_TEMP_LBL:
+    TEXT: "TEMP"
+    X: 20
+    Y: 95
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU0_TEMP_UNIT:
+    TEXT: "C"
+    X: 183
+    Y: 220
+    FONT: barlow/Barlow-Medium.ttf
+    FONT_SIZE: 50
+    FONT_COLOR: 68, 68, 68
+    ANCHOR: lb
+
+  GPU0_FAN_LBL:
+    TEXT: "FAN"
+    X: 260
+    Y: 95
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU0_LOAD_LBL:
+    TEXT: "LOAD"
+    X: 260
+    Y: 190
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU0_POWER_LBL:
+    TEXT: "POWER"
+    X: 20
+    Y: 285
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU0_POWER_UNIT:
+    TEXT: "W"
+    X: 183
+    Y: 410
+    FONT: barlow/Barlow-Medium.ttf
+    FONT_SIZE: 47
+    FONT_COLOR: 68, 68, 68
+    ANCHOR: lb
+
+  GPU0_VRAM_LBL:
+    TEXT: "VRAM"
+    X: 260
+    Y: 285
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU0_VRAM_UNIT:
+    TEXT: "GB"
+    X: 423
+    Y: 410
+    FONT: barlow/Barlow-Medium.ttf
+    FONT_SIZE: 35
+    FONT_COLOR: 68, 68, 68
+    ANCHOR: lb
+
+  # =========================================================================
+  # ZONE 2: GPU1 (X=480-959) - offset +480
+  # =========================================================================
+  GPU1_TITLE:
+    TEXT: "GPU1"
+    X: 500
+    Y: 52
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 48
+    FONT_COLOR: 0, 0, 0
+    ANCHOR: lm
+
+  GPU1_TEMP_LBL:
+    TEXT: "TEMP"
+    X: 500
+    Y: 95
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU1_TEMP_UNIT:
+    TEXT: "C"
+    X: 663
+    Y: 220
+    FONT: barlow/Barlow-Medium.ttf
+    FONT_SIZE: 50
+    FONT_COLOR: 68, 68, 68
+    ANCHOR: lb
+
+  GPU1_FAN_LBL:
+    TEXT: "FAN"
+    X: 740
+    Y: 95
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU1_LOAD_LBL:
+    TEXT: "LOAD"
+    X: 740
+    Y: 190
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU1_POWER_LBL:
+    TEXT: "POWER"
+    X: 500
+    Y: 285
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU1_POWER_UNIT:
+    TEXT: "W"
+    X: 663
+    Y: 410
+    FONT: barlow/Barlow-Medium.ttf
+    FONT_SIZE: 47
+    FONT_COLOR: 68, 68, 68
+    ANCHOR: lb
+
+  GPU1_VRAM_LBL:
+    TEXT: "VRAM"
+    X: 740
+    Y: 285
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  GPU1_VRAM_UNIT:
+    TEXT: "GB"
+    X: 903
+    Y: 410
+    FONT: barlow/Barlow-Medium.ttf
+    FONT_SIZE: 35
+    FONT_COLOR: 68, 68, 68
+    ANCHOR: lb
+
+  # =========================================================================
+  # ZONE 3: CPU (X=960-1439) - offset +960
+  # =========================================================================
+  CPU_TITLE:
+    TEXT: "CPU"
+    X: 980
+    Y: 52
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 48
+    FONT_COLOR: 0, 0, 0
+    ANCHOR: lm
+
+  CPU_TEMP_LBL:
+    TEXT: "TEMP"
+    X: 980
+    Y: 95
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  CPU_TEMP_UNIT:
+    TEXT: "C"
+    X: 1143
+    Y: 220
+    FONT: barlow/Barlow-Medium.ttf
+    FONT_SIZE: 50
+    FONT_COLOR: 68, 68, 68
+    ANCHOR: lb
+
+  CPU_PUMP_LBL:
+    TEXT: "PUMP"
+    X: 1220
+    Y: 95
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  CPU_RAD_LBL:
+    TEXT: "RAD"
+    X: 1220
+    Y: 190
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  CPU_POWER_LBL:
+    TEXT: "POWER"
+    X: 980
+    Y: 285
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  CPU_POWER_UNIT:
+    TEXT: "W"
+    X: 1143
+    Y: 410
+    FONT: barlow/Barlow-Medium.ttf
+    FONT_SIZE: 47
+    FONT_COLOR: 68, 68, 68
+    ANCHOR: lb
+
+  CPU_REAR_LBL:
+    TEXT: "REAR"
+    X: 1220
+    Y: 285
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  CPU_INTAKE_LBL:
+    TEXT: "INTAKE"
+    X: 1220
+    Y: 380
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: la
+
+  # =========================================================================
+  # ZONE 4: BANDWIDTH (X=1440-1919)
+  # Headers Y=50 (upper) / Y=280 (lower), both lm anchor
+  # Values rm at row center, labels lb at baseline
+  # =========================================================================
+  
+  # Upper header - GPU
+  BW_GPU_TITLE:
+    TEXT: "GPU"
+    X: 1460
+    Y: 52
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 48
+    FONT_COLOR: 0, 0, 0
+    ANCHOR: lm
+
+  BW_GPU_UNIT:
+    TEXT: "Gbps"
+    X: 1660
+    Y: 52
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 36
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: rm
+
+  # Upper header - SSD
+  BW_SSD_TITLE:
+    TEXT: "SSD"
+    X: 1700
+    Y: 52
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 48
+    FONT_COLOR: 0, 0, 0
+    ANCHOR: lm
+
+  BW_SSD_UNIT:
+    TEXT: "Gbps"
+    X: 1900
+    Y: 52
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 36
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: rm
+
+  # Row 1 labels (Y=136 lb)
+  BW_GPU_RX_LBL:
+    TEXT: "RX"
+    X: 1460
+    Y: 140
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: lb
+
+  BW_SSD_RX_LBL:
+    TEXT: "RX"
+    X: 1700
+    Y: 140
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: lb
+
+  # Row 2 labels (Y=211 lb)
+  BW_GPU_TX_LBL:
+    TEXT: "TX"
+    X: 1460
+    Y: 215
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: lb
+
+  BW_SSD_TX_LBL:
+    TEXT: "TX"
+    X: 1700
+    Y: 215
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: lb
+
+  # Lower header - NET
+  BW_NET_TITLE:
+    TEXT: "NET"
+    X: 1460
+    Y: 280
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 48
+    FONT_COLOR: 0, 0, 0
+    ANCHOR: lm
+
+  BW_NET_UNIT:
+    TEXT: "Gbps"
+    X: 1660
+    Y: 280
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 36
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: rm
+
+  # Lower header - USED
+  BW_USED_TITLE:
+    TEXT: "USED"
+    X: 1700
+    Y: 280
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 48
+    FONT_COLOR: 0, 0, 0
+    ANCHOR: lm
+
+  BW_USED_UNIT:
+    TEXT: "%"
+    X: 1900
+    Y: 280
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 36
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: rm
+
+  # Row 3 labels (Y=366 lb)
+  BW_NET_RX_LBL:
+    TEXT: "RX"
+    X: 1460
+    Y: 370
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: lb
+
+  BW_RAM_LBL:
+    TEXT: "RAM"
+    X: 1700
+    Y: 370
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: lb
+
+  # Row 4 labels (Y=441 lb)
+  BW_NET_TX_LBL:
+    TEXT: "TX"
+    X: 1460
+    Y: 445
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: lb
+
+  BW_SSD_USED_LBL:
+    TEXT: "SSD"
+    X: 1700
+    Y: 445
+    FONT: barlow/Barlow-Regular.ttf
+    FONT_SIZE: 32
+    FONT_COLOR: 85, 85, 85
+    ANCHOR: lb
+
+
+# =============================================================================
+# DYNAMIC SENSORS
+# =============================================================================
+STATS:
+  CUSTOM:
+    INTERVAL: 1
+
+    # =========================================================================
+    # ZONE 1: GPU0 SENSORS
+    # Hero numbers: rb anchor at X=180 (col1) / X=420 (col2 VRAM)
+    # Hero Y: 220 (row 2), 410 (row 4)
+    # Bars: Y=140 (row1), 235 (row2), 330 (row3), 425 (row4) - 20px height
+    # =========================================================================
+    Gpu0_Temp:
+      TEXT:
+        SHOW: true
+        X: 180
+        Y: 220
+        WIDTH: 160
+        HEIGHT: 80
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 100
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+      GRAPH:
+        SHOW: true
+        X: 20
+        Y: 235
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 25
+        MAX_VALUE: 95
+
+    Gpu0_Fan:
+      GRAPH:
+        SHOW: true
+        X: 260
+        Y: 140
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 100
+
+    Gpu0_Load:
+      GRAPH:
+        SHOW: true
+        X: 260
+        Y: 235
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 100
+
+    Gpu0_Power:
+      TEXT:
+        SHOW: true
+        X: 180
+        Y: 410
+        WIDTH: 160
+        HEIGHT: 75
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 95
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+      GRAPH:
+        SHOW: true
+        X: 20
+        Y: 425
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 575
+
+    Gpu0_Vram:
+      TEXT:
+        SHOW: true
+        X: 420
+        Y: 410
+        WIDTH: 160
+        HEIGHT: 55
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 70
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+      GRAPH:
+        SHOW: true
+        X: 260
+        Y: 425
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 32
+
+    # =========================================================================
+    # ZONE 2: GPU1 SENSORS (offset X+480)
+    # =========================================================================
+    Gpu1_Temp:
+      TEXT:
+        SHOW: true
+        X: 660
+        Y: 220
+        WIDTH: 160
+        HEIGHT: 80
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 100
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+      GRAPH:
+        SHOW: true
+        X: 500
+        Y: 235
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 25
+        MAX_VALUE: 95
+
+    Gpu1_Fan:
+      GRAPH:
+        SHOW: true
+        X: 740
+        Y: 140
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 100
+
+    Gpu1_Load:
+      GRAPH:
+        SHOW: true
+        X: 740
+        Y: 235
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 100
+
+    Gpu1_Power:
+      TEXT:
+        SHOW: true
+        X: 660
+        Y: 410
+        WIDTH: 160
+        HEIGHT: 75
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 95
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+      GRAPH:
+        SHOW: true
+        X: 500
+        Y: 425
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 575
+
+    Gpu1_Vram:
+      TEXT:
+        SHOW: true
+        X: 900
+        Y: 410
+        WIDTH: 160
+        HEIGHT: 55
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 70
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+      GRAPH:
+        SHOW: true
+        X: 740
+        Y: 425
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 32
+
+    # =========================================================================
+    # ZONE 3: CPU SENSORS (offset X+960)
+    # =========================================================================
+    Cpu_Temp:
+      TEXT:
+        SHOW: true
+        X: 1140
+        Y: 220
+        WIDTH: 160
+        HEIGHT: 80
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 100
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+      GRAPH:
+        SHOW: true
+        X: 980
+        Y: 235
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 25
+        MAX_VALUE: 95
+
+    Cpu_Pump:
+      GRAPH:
+        SHOW: true
+        X: 1220
+        Y: 140
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 3000
+
+    Cpu_Rad:
+      GRAPH:
+        SHOW: true
+        X: 1220
+        Y: 235
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 2300
+
+    Cpu_Power:
+      TEXT:
+        SHOW: true
+        X: 1140
+        Y: 410
+        WIDTH: 160
+        HEIGHT: 75
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 95
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+      GRAPH:
+        SHOW: true
+        X: 980
+        Y: 425
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 350
+
+    Cpu_Rear:
+      GRAPH:
+        SHOW: true
+        X: 1220
+        Y: 330
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 2300
+
+    Cpu_Intake:
+      GRAPH:
+        SHOW: true
+        X: 1220
+        Y: 425
+        WIDTH: 200
+        HEIGHT: 20
+        BAR_COLOR: 136, 136, 136
+        BAR_OUTLINE: true
+        BACKGROUND_COLOR: 255, 255, 255
+        MIN_VALUE: 0
+        MAX_VALUE: 2600
+
+    # =========================================================================
+    # ZONE 4: BANDWIDTH SENSORS
+    # Values: rm anchor at row center Y (118, 193, 348, 423)
+    # X positions: 1660 (col1), 1900 (col2)
+    # =========================================================================
+    Bw_GpuRx:
+      TEXT:
+        SHOW: true
+        X: 1660
+        Y: 140
+        WIDTH: 130
+        HEIGHT: 64
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 64
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+
+    Bw_GpuTx:
+      TEXT:
+        SHOW: true
+        X: 1660
+        Y: 215
+        WIDTH: 130
+        HEIGHT: 64
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 64
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+
+    Bw_SsdRead:
+      TEXT:
+        SHOW: true
+        X: 1900
+        Y: 140
+        WIDTH: 130
+        HEIGHT: 64
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 64
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+
+    Bw_SsdWrite:
+      TEXT:
+        SHOW: true
+        X: 1900
+        Y: 215
+        WIDTH: 130
+        HEIGHT: 64
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 64
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+
+    Bw_NetRx:
+      TEXT:
+        SHOW: true
+        X: 1660
+        Y: 370
+        WIDTH: 130
+        HEIGHT: 64
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 64
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+
+    Bw_NetTx:
+      TEXT:
+        SHOW: true
+        X: 1660
+        Y: 445
+        WIDTH: 130
+        HEIGHT: 64
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 64
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+
+    Bw_RamUsed:
+      TEXT:
+        SHOW: true
+        X: 1900
+        Y: 370
+        WIDTH: 100
+        HEIGHT: 64
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 64
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+
+    Bw_SsdUsed:
+      TEXT:
+        SHOW: true
+        X: 1900
+        Y: 445
+        WIDTH: 100
+        HEIGHT: 64
+        FONT: barlow/Barlow-SemiBold.ttf
+        FONT_SIZE: 64
+        FONT_COLOR: 0, 0, 0
+        ANCHOR: rb
+    # =========================================================================
+    # ZONE 1: GPU0 STATUS BADGES
+    # Font: 22px, Padding: 9px, Anchor: mm, 10px gaps
+    # =========================================================================
+    Gpu0_TempFlag:
+      TEXT:
+        SHOW: True
+        X: 240
+        Y: 52
+        WIDTH: 74
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Gpu0_Temp >= 85"
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Gpu0_Temp >= 70"
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 34, 197, 94
+
+    Gpu0_PowerFlag:
+      TEXT:
+        SHOW: True
+        X: 333
+        Y: 52
+        WIDTH: 92
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Gpu0_SwPowerCap == Active"
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Gpu0_Power >= 450"
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 34, 197, 94
+
+    Gpu0_CoolFlag:
+      TEXT:
+        SHOW: True
+        X: 424
+        Y: 52
+        WIDTH: 71
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Gpu0_Fan >= 95"
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Gpu0_Fan >= 80"
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 34, 197, 94
+
+    # =========================================================================
+    # ZONE 2: GPU1 STATUS BADGES (+480)
+    # =========================================================================
+    Gpu1_TempFlag:
+      TEXT:
+        SHOW: True
+        X: 720
+        Y: 52
+        WIDTH: 74
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Gpu1_Temp >= 85"
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Gpu1_Temp >= 70"
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 34, 197, 94
+
+    Gpu1_PowerFlag:
+      TEXT:
+        SHOW: True
+        X: 813
+        Y: 52
+        WIDTH: 92
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Gpu1_SwPowerCap == Active"
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Gpu1_Power >= 450"
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 34, 197, 94
+
+    Gpu1_CoolFlag:
+      TEXT:
+        SHOW: True
+        X: 904
+        Y: 52
+        WIDTH: 71
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Gpu1_Fan >= 95"
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Gpu1_Fan >= 80"
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 34, 197, 94
+
+    # =========================================================================
+    # ZONE 3: CPU STATUS BADGES (+960)
+    # =========================================================================
+    Cpu_TempFlag:
+      TEXT:
+        SHOW: True
+        X: 1200
+        Y: 52
+        WIDTH: 74
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Cpu_Temp >= 85"
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Cpu_Temp >= 70"
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 34, 197, 94
+
+    Cpu_PowerFlag:
+      TEXT:
+        SHOW: True
+        X: 1293
+        Y: 52
+        WIDTH: 92
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Cpu_Power >= 180"
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Cpu_Power >= 140"
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 34, 197, 94
+
+    Cpu_CoolFlag:
+      TEXT:
+        SHOW: True
+        X: 1384
+        Y: 52
+        WIDTH: 71
+        HEIGHT: 34
+        ANCHOR: mm
+        FONT: barlow/Barlow-Black.ttf
+        FONT_SIZE: 22
+        FONT_COLOR: 255, 255, 255
+        CASE:
+          - WHEN: "Cpu_Pump >= 2800"
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 239, 68, 68
+          - WHEN: "Cpu_Pump >= 2400"
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 245, 158, 11
+          - ELSE: true
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 34, 197, 94

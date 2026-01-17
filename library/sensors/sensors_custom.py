@@ -51,6 +51,66 @@ class CustomDataSource(ABC):
         pass
 
 
+# =============================================================================
+# SHIRO CUSTOM SENSORS
+# Import all sensor classes from sensors_shiro.py to make them available
+# =============================================================================
+from library.sensors.sensors_shiro import (
+    # GPU0 Sensors
+    Gpu0_Temp,
+    Gpu0_TempMax,
+    Gpu0_Fan,
+    Gpu0_Load,
+    Gpu0_Power,
+    Gpu0_PowerMax,
+    Gpu0_Vram,
+    Gpu0_VramMax,
+    Gpu0_Pstate,
+    Gpu0_SwPowerCap,
+    # GPU1 Sensors
+    Gpu1_Temp,
+    Gpu1_TempMax,
+    Gpu1_Fan,
+    Gpu1_Load,
+    Gpu1_Power,
+    Gpu1_PowerMax,
+    Gpu1_Vram,
+    Gpu1_VramMax,
+    Gpu1_Pstate,
+    Gpu1_SwPowerCap,
+    # CPU Sensors
+    Cpu_Temp,
+    Cpu_Power,
+    Cpu_Pump,
+    Cpu_Rad,
+    Cpu_Rear,
+    Cpu_Intake,
+    Cpu_Load,
+    # Bandwidth Sensors
+    Bw_GpuRx,
+    Bw_GpuTx,
+    Bw_SsdRead,
+    Bw_SsdWrite,
+    Bw_NetRx,
+    Bw_NetTx,
+    Bw_RamUsed,
+    Bw_SsdUsed,
+    # Status Flag Placeholders (for CASE/WHEN conditional formatting)
+    Gpu0_StateFlag,
+    Gpu0_TempFlag,
+    Gpu0_PowerFlag,
+    Gpu0_CoolFlag,
+    Gpu1_StateFlag,
+    Gpu1_TempFlag,
+    Gpu1_PowerFlag,
+    Gpu1_CoolFlag,
+    Cpu_StateFlag,
+    Cpu_TempFlag,
+    Cpu_PowerFlag,
+    Cpu_CoolFlag,
+)
+
+
 # Example for a custom data class that has numeric and text values
 class ExampleCustomNumericData(CustomDataSource):
     # This list is used to store the last 10 values to display a line graph

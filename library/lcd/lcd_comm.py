@@ -291,21 +291,23 @@ class LcdComm(ABC):
             left, top = math.floor(left), math.floor(top)
             right, bottom = math.ceil(right), math.ceil(bottom)
         else:
-            left, top, right, bottom = x, y, x + width, y + height
-
-            if anchor.startswith("m"):
-                x = int((right + left) / 2)
-            elif anchor.startswith("r"):
-                x = right
+            # Calculate bounding box based on anchor type
+            # For right-anchor, x is the RIGHT edge, so left = x - width
+            # For middle-anchor, x is the CENTER, so left = x - width/2
+            # For left-anchor, x is the LEFT edge, so left = x
+            if anchor.startswith("r"):
+                left, right = x - width, x
+            elif anchor.startswith("m"):
+                left, right = x - width // 2, x + width // 2
             else:
-                x = left
+                left, right = x, x + width
 
-            if anchor.endswith("m"):
-                y = int((bottom + top) / 2)
-            elif anchor.endswith("b"):
-                y = bottom
+            if anchor.endswith("b"):
+                top, bottom = y - height, y
+            elif anchor.endswith("m"):
+                top, bottom = y - height // 2, y + height // 2
             else:
-                y = top
+                top, bottom = y, y + height
 
         # Draw text onto the background image with specified color & font
         d.text((x, y), text, font=ttfont, fill=font_color, align=align, anchor=anchor)
@@ -357,7 +359,7 @@ class LcdComm(ABC):
             bar_image = bar_image.crop(box=(x, y, x + width, y + height))
 
         # Draw progress bar
-        bar_filled_width = (value / (max_value - min_value) * width) - 1
+        bar_filled_width = ((value - min_value) / (max_value - min_value) * width) - 1
         if bar_filled_width < 0:
             bar_filled_width = 0
         draw = ImageDraw.Draw(bar_image)

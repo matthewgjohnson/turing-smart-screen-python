@@ -29,6 +29,7 @@
 from library.pythoncheck import check_python_version
 check_python_version()
 
+import argparse
 import glob
 import os
 import sys
@@ -50,7 +51,7 @@ try:
 
     from library.log import logger
     import library.scheduler as scheduler
-    from library.display import display
+    from library.display import display, create_multi_display, MultiDisplay, initialize_multi_display, stop_all_videos
 
 except Exception as e:
     print("""Import error: %s
@@ -72,10 +73,30 @@ MAIN_DIRECTORY = str(Path(__file__).parent.resolve()) + "/"
 
 if __name__ == "__main__":
 
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Turing Smart Screen System Monitor')
+    parser.add_argument('--list-devices', action='store_true',
+                        help='List all connected Turing Smart Screen devices and exit')
+    args = parser.parse_args()
+
+    # Handle --list-devices
+    if args.list_devices:
+        from library.lcd.lcd_comm_turing_usb import list_usb_devices
+        list_usb_devices()
+        sys.exit(0)
+
     # Apply system locale to this program
     locale.setlocale(locale.LC_ALL, '')
 
     logger.debug("Using Python %s" % sys.version)
+
+    # Check for multi-display mode
+    from library import config
+    multi_display_mode = config.is_multi_display_mode()
+    multi_display = None
+    if multi_display_mode:
+        logger.info("Multi-display mode enabled")
+        multi_display = create_multi_display()
 
 
     def wait_for_empty_queue(timeout: int = 5):
@@ -90,8 +111,15 @@ if __name__ == "__main__":
         logger.debug("(Waited %.1fs)" % wait_time)
 
     def clean_stop(tray_icon=None):
+        # Stop any video playback first
+        if multi_display_mode and multi_display:
+            stop_all_videos(multi_display)
+        
         # Turn screen and LEDs off before stopping
-        display.turn_off()
+        if multi_display_mode and multi_display:
+            multi_display.turn_off_all()
+        else:
+            display.turn_off()
 
         # Do not stop the program now in case data transmission was in progress
         # Instead, ask the scheduler to empty the action queue before stopping
@@ -148,13 +176,22 @@ if __name__ == "__main__":
                 # WM_POWERBROADCAST is used to detect computer going to/resuming from sleep
                 if wParam == win32con.PBT_APMSUSPEND:
                     logger.info("Computer is going to sleep, display will turn off")
-                    display.turn_off()
+                    if multi_display_mode and multi_display:
+                        multi_display.turn_off_all()
+                    else:
+                        display.turn_off()
                 elif wParam == win32con.PBT_APMRESUMEAUTOMATIC:
                     logger.info("Computer is resuming from sleep, display will turn on")
-                    display.turn_on()
-                    # Some models have troubles displaying back the previous bitmap after being turned off/on
-                    display.display_static_images()
-                    display.display_static_text()
+                    if multi_display_mode and multi_display:
+                        for disp in multi_display:
+                            disp.turn_on()
+                            disp.display_static_images()
+                            disp.display_static_text()
+                    else:
+                        display.turn_on()
+                        # Some models have troubles displaying back the previous bitmap after being turned off/on
+                        display.display_static_images()
+                        display.display_static_text()
             else:
                 # For any other events, the program will stop
                 logger.info("Program will now exit")
@@ -195,41 +232,28 @@ if __name__ == "__main__":
     if platform.system() == "Windows":
         win32api.SetConsoleCtrlHandler(on_win32_ctrl_event, True)
 
-    # Initialize the display
-    logger.info("Initialize display")
-    display.initialize_display()
-
-    # Start serial queue handler
-    scheduler.QueueHandler()
-
-    # Create all static images
-    display.display_static_images()
-
-    # Create all static texts
-    display.display_static_text()
+    # Initialize the display(s)
+    if multi_display_mode and multi_display:
+        logger.info("Initialize multi-display")
+        initialize_multi_display(multi_display)
+        # Start serial queue handler
+        scheduler.QueueHandler()
+    else:
+        logger.info("Initialize display")
+        display.initialize_display()
+        # Start serial queue handler
+        scheduler.QueueHandler()
+        # Create all static images
+        display.display_static_images()
+        # Create all static texts
+        display.display_static_text()
 
     # Wait for static images/text to be displayed before starting monitoring (to avoid filling the queue while waiting)
     wait_for_empty_queue(10)
 
-    # Start sensor scheduled reading. Avoid starting them all at the same time to optimize load
+    # Start sensor scheduled reading based on all display templates
     logger.info("Starting system monitoring")
-    import library.stats as stats
-
-    scheduler.CPUPercentage(); time.sleep(0.25)
-    scheduler.CPUFrequency(); time.sleep(0.25)
-    scheduler.CPULoad(); time.sleep(0.25)
-    scheduler.CPUTemperature(); time.sleep(0.25)
-    scheduler.CPUFanSpeed(); time.sleep(0.25)
-    if stats.Gpu.is_available():
-        scheduler.GpuStats(); time.sleep(0.25)
-    scheduler.MemoryStats(); time.sleep(0.25)
-    scheduler.DiskStats(); time.sleep(0.25)
-    scheduler.NetStats(); time.sleep(0.25)
-    scheduler.DateStats(); time.sleep(0.25)
-    scheduler.SystemUptimeStats(); time.sleep(0.25)
-    scheduler.CustomStats(); time.sleep(0.25)
-    scheduler.WeatherStats(); time.sleep(0.25)
-    scheduler.PingStats(); time.sleep(0.25)
+    scheduler.start_all(stagger_delay=0.25)
 
     # OS-specific tasks
     if tray_icon and platform.system() == "Darwin":  # macOS-specific

@@ -300,7 +300,20 @@ class GpuNvidia(sensors.Gpu):
 
     @staticmethod
     def frequency() -> float:
-        # Not supported by Python libraries
+        # GPUtil does not support frequency, use nvidia-smi
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['nvidia-smi', '--query-gpu=clocks.gr', '--format=csv,noheader,nounits'],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().splitlines()
+                clocks = [int(line.strip()) for line in lines if line.strip()]
+                if clocks:
+                    return float(sum(clocks) / len(clocks))
+        except Exception:
+            pass
         return math.nan
 
     @staticmethod
