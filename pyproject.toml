@@ -21,3 +21,8 @@ dependencies = [
     "numpy>=2.0.0",
     "GPUtil @ git+https://github.com/mathoudebine/gputil.git@1.4.1-py3.13",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
