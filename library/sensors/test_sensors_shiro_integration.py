@@ -18,18 +18,14 @@ import time
 
 import pytest
 
-# Same mock-import dance as the unit tests: the framework's sensors_base
-# isn't available in a bare test run.
+# Ensure project root is on sys.path so `library.sensors` resolves.
 import sys
-from unittest.mock import MagicMock
+from pathlib import Path
 
-mock_base = MagicMock()
-mock_base.CustomDataSource = object
-sys.modules.setdefault("library", MagicMock())
-sys.modules.setdefault("library.sensors", MagicMock())
-sys.modules.setdefault("library.sensors.sensors_base", mock_base)
+_project_root = str(Path(__file__).resolve().parents[2])
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
-from library.sensors import sensors_shiro
 from library.sensors.sensors_shiro import BandwidthCollector
 
 pytestmark = pytest.mark.integration
