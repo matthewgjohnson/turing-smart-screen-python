@@ -65,15 +65,25 @@ def _prime_and_reset():
 
 class TestSsdBandwidth:
     def test_ssd_bandwidth_moves(self, tmp_path):
-        """Write and read ~50 MB; verify SSD bandwidth sensors show activity."""
+        """Write ~50 MB and force a read from disk; verify SSD bandwidth sensors show activity."""
         _prime_and_reset()
 
-        # Generate real disk I/O
+        # Generate real disk I/O — write
         tmp_file = tmp_path / "integration_test_blob"
         data = os.urandom(50 * 1024 * 1024)  # 50 MB
         tmp_file.write_bytes(data)
         os.sync()
-        _ = tmp_file.read_bytes()
+
+        # Drop page cache so the read-back hits the NVMe.
+        # Requires CAP_SYS_ADMIN or root; skip read assertion if not possible.
+        read_from_disk = False
+        try:
+            with open("/proc/sys/vm/drop_caches", "w") as f:
+                f.write("3\n")
+            _ = tmp_file.read_bytes()
+            read_from_disk = True
+        except PermissionError:
+            pass
 
         # Let a little time pass so the delta is meaningful
         time.sleep(0.1)
@@ -82,7 +92,8 @@ class TestSsdBandwidth:
         ssd_read = BandwidthCollector.get("ssd_read")
 
         assert ssd_write > 0, f"ssd_write should be >0 after writing 50 MB, got {ssd_write}"
-        assert ssd_read > 0, f"ssd_read should be >0 after reading 50 MB, got {ssd_read}"
+        if read_from_disk:
+            assert ssd_read > 0, f"ssd_read should be >0 after reading 50 MB from disk, got {ssd_read}"
 
 
 class TestNetworkBandwidth:
