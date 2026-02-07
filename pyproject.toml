@@ -22,6 +22,11 @@ dependencies = [
     "GPUtil @ git+https://github.com/mathoudebine/gputil.git@1.4.1-py3.13",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that run on real hardware (Shiro)",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
