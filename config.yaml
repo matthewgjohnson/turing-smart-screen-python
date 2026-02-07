@@ -22,6 +22,8 @@ display:
 multi-display:
   - DEVICE: 0
     VIDEO: "res/videos/Shiro Video Vertical 4.mp4"
+    RESTART_MINUTES: 2
+    REINIT_MINUTES: 3
     REVISION: C_USB
     DISPLAY_REVERSE: true
     BRIGHTNESS: 30

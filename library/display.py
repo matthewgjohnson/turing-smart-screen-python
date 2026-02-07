@@ -315,13 +315,16 @@ class Display:
         logger.info("Showing image: %s", full_path)
         return self.lcd.show_image(str(full_path))
 
-    def show_video(self, video_path: str, brightness: int = 32, rotate_180: bool = False) -> bool:
+    def show_video(self, video_path: str, brightness: int = 32, rotate_180: bool = False,
+                   restart_minutes=None, reinit_minutes=None) -> bool:
         """Start video playback in a loop.
 
         Args:
             video_path: Path to MP4 file (relative to MAIN_DIRECTORY)
             brightness: Display brightness (0-100)
             rotate_180: If True, rotate video 180 degrees
+            restart_minutes: Soft restart interval (reopen file, restart loop)
+            reinit_minutes: Hard restart interval (re-send USB setup commands)
 
         Returns:
             True if started successfully, False on error
@@ -342,7 +345,8 @@ class Display:
         self.video_stop_event = threading.Event()
         self.video_thread = threading.Thread(
             target=self.lcd.show_video,
-            args=(str(full_path), self.video_stop_event, brightness, rotate_180),
+            args=(str(full_path), self.video_stop_event, brightness, rotate_180,
+                  restart_minutes, reinit_minutes),
             daemon=False
         )
         self.video_thread.start()
@@ -507,6 +511,8 @@ def create_multi_display() -> MultiDisplay:
             'DISPLAY_REVERSE': display_cfg.get('DISPLAY_REVERSE', False),
             'RESET_ON_STARTUP': display_cfg.get('RESET_ON_STARTUP', True),
             'ORIENTATION': display_cfg.get('ORIENTATION', 'portrait'),
+            'RESTART_MINUTES': display_cfg.get('RESTART_MINUTES'),
+            'REINIT_MINUTES': display_cfg.get('REINIT_MINUTES'),
         }
 
         # Validate paths early
@@ -597,7 +603,9 @@ def initialize_multi_display(multi_display: MultiDisplay):
         logger.info("Initializing display %s in video mode", device_id)
         brightness = disp.display_config.get('BRIGHTNESS', 32)
         rotate_180 = disp.display_config.get('DISPLAY_REVERSE', False)
-        disp.show_video(disp.video_path, brightness, rotate_180)
+        restart_minutes = disp.display_config.get('RESTART_MINUTES')
+        reinit_minutes = disp.display_config.get('REINIT_MINUTES')
+        disp.show_video(disp.video_path, brightness, rotate_180, restart_minutes, reinit_minutes)
 
 
 def stop_all_videos(multi_display: MultiDisplay):

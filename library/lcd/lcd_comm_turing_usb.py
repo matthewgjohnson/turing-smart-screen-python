@@ -1048,21 +1048,13 @@ class LcdCommTuringUSB(LcdComm):
         encoded = _encode_png(base_image)
         send_image(self.dev, encoded)
 
-    def show_video(self, video_path: str, stop_event: threading.Event,
-                   brightness: int = 32, rotate_180: bool = False):
-        """Stream H.264 video in a continuous loop.
+    def _video_setup(self, brightness: int, output_path: str):
+        """Send USB setup commands for video playback.
 
         Args:
-            video_path: Path to MP4 file (will be converted to H.264)
-            stop_event: Threading event to signal stop
             brightness: Display brightness (0-100)
-            rotate_180: If True, rotate video 180 degrees via ffmpeg
-                       (device rotation does NOT work for video)
+            output_path: Path to H.264 file (logged for diagnostics)
         """
-        # Extract/convert with rotation if needed
-        output_path = extract_h264_from_mp4(video_path, rotate_180=rotate_180)
-
-        # Video setup commands
         write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_111)))
         write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_112)))
         write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_13)))
@@ -1071,10 +1063,45 @@ class LcdCommTuringUSB(LcdComm):
         clear_image(self.dev)
         send_frame_rate_command(self.dev, DISPLAY_FPS)
 
+    def show_video(self, video_path: str, stop_event: threading.Event,
+                   brightness: int = 32, rotate_180: bool = False,
+                   restart_minutes=None, reinit_minutes=None):
+        """Stream H.264 video in a continuous loop.
+
+        Args:
+            video_path: Path to MP4 file (will be converted to H.264)
+            stop_event: Threading event to signal stop
+            brightness: Display brightness (0-100)
+            rotate_180: If True, rotate video 180 degrees via ffmpeg
+                       (device rotation does NOT work for video)
+            restart_minutes: Soft restart interval — reopen file, restart loop
+            reinit_minutes: Hard restart interval — re-send USB setup commands
+        """
+        # Extract/convert with rotation if needed
+        output_path = extract_h264_from_mp4(video_path, rotate_180=rotate_180)
+
+        # Initial video setup
+        self._video_setup(brightness, output_path)
+
         logger.info("Starting video: %s", video_path)
+
+        restart_seconds = restart_minutes * 60 if restart_minutes else None
+        reinit_seconds = reinit_minutes * 60 if reinit_minutes else None
+        last_restart = time.time()
+        last_reinit = time.time()
 
         try:
             while not stop_event.is_set():
+                now = time.time()
+
+                # Check reinit first (takes precedence, subsumes soft restart)
+                if reinit_seconds and (now - last_reinit) >= reinit_seconds:
+                    logger.info("Periodic reinit triggered after %s minutes", reinit_minutes)
+                    self.stop_video()
+                    self._video_setup(brightness, output_path)
+                    last_reinit = now
+                    last_restart = now  # reset soft timer too
+
                 reset_delay_counter()
                 with open(output_path, 'rb') as f:
                     while not stop_event.is_set():
@@ -1095,6 +1122,12 @@ class LcdCommTuringUSB(LcdComm):
 
                         if response is None or len(response) < 9 or response[8] <= 3:
                             delay(self.dev, 2)
+
+                        # Check soft restart timer
+                        if restart_seconds and (time.time() - last_restart) >= restart_seconds:
+                            logger.info("Periodic restart triggered after %s minutes", restart_minutes)
+                            last_restart = time.time()
+                            break  # break inner loop; outer loop reopens file
 
                 logger.debug("Video loop complete, restarting...")
 
