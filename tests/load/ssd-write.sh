@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # SSD Write load test — 8 parallel dd streams from /dev/zero
 # Expected: ~75+ Gbps on Samsung 9100 PRO NVMe
-# Usage: bash tests/load/ssd-write.sh [count_MB_per_stream]
+# Usage: bash tests/load/ssd-write.sh [duration_seconds]
 set -euo pipefail
 
-COUNT=${1:-5000}  # MB per stream, default 5000 (5GB x 8 = 40GB total)
+DURATION=${1:-15}
 
-echo "SSD WRITE: 8 parallel streams, ${COUNT}MB each"
+echo "SSD WRITE: 8 parallel streams for ${DURATION}s"
 for i in $(seq 1 8); do
-    dd if=/dev/zero of=/tmp/ssd_load_$i bs=4M count=$((COUNT / 4)) oflag=direct 2>/dev/null &
+    ( timeout "$DURATION" dd if=/dev/zero of=/tmp/ssd_load_$i bs=4M oflag=direct 2>/dev/null || true ) &
 done
 echo "Running... watch SSD Write on Display 1"
 wait
