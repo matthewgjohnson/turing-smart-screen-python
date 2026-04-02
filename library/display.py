@@ -22,6 +22,7 @@ import atexit
 import signal
 import threading
 from pathlib import Path
+from typing import Optional
 from library import config
 from library.lcd.lcd_comm import Orientation
 from library.lcd.lcd_comm_rev_a import LcdCommRevA
@@ -104,7 +105,7 @@ def _get_theme_orientation_for_config(theme_data, display_config) -> Orientation
         return Orientation.PORTRAIT
 
 
-def validate_config(display_config: dict, theme_data: dict = None) -> list:
+def validate_config(display_config: dict, theme_data: Optional[dict] = None) -> list:
     """Validate display configuration.
 
     Args:
@@ -140,7 +141,7 @@ def validate_config(display_config: dict, theme_data: dict = None) -> list:
     return errors
 
 
-def validate_paths(image_path: str = None, video_path: str = None) -> list:
+def validate_paths(image_path: Optional[str] = None, video_path: Optional[str] = None) -> list:
     """Validate image/video file paths.
 
     Args:
@@ -234,6 +235,9 @@ class Display:
 
     def initialize_display(self):
         """Initialize the display hardware."""
+        if self.lcd is None:
+            logger.error("Cannot initialize display: lcd is None")
+            return
         # Reset screen if configured
         if self.display_config.get("RESET_ON_STARTUP", True):
             self.lcd.Reset()
@@ -248,17 +252,23 @@ class Display:
 
     def turn_on(self):
         """Turn on display and set brightness."""
+        if self.lcd is None:
+            return
         self.lcd.ScreenOn()
         self.lcd.SetBrightness(self.display_config.get("BRIGHTNESS", 25))
         self.lcd.SetBackplateLedColor(self.theme_data['display'].get("DISPLAY_RGB_LED", (255, 255, 255)))
 
     def turn_off(self):
         """Turn off display."""
+        if self.lcd is None:
+            return
         self.lcd.ScreenOff()
         self.lcd.SetBackplateLedColor(led_color=(0, 0, 0))
 
     def display_static_images(self):
         """Display static images defined in theme."""
+        if self.lcd is None:
+            return
         if self.theme_data.get('static_images', False):
             for image in self.theme_data['static_images']:
                 logger.debug("Drawing Image: %s", image)
@@ -272,6 +282,8 @@ class Display:
 
     def display_static_text(self):
         """Display static text defined in theme."""
+        if self.lcd is None:
+            return
         if self.theme_data.get('static_text', False):
             for text in self.theme_data['static_text']:
                 logger.debug("Drawing Text: %s", text)
@@ -313,6 +325,9 @@ class Display:
 
         full_path = Path(config.MAIN_DIRECTORY) / image_path
         logger.info("Showing image: %s", full_path)
+        if not isinstance(self.lcd, LcdCommTuringUSB):
+            logger.error("show_image is only supported on LcdCommTuringUSB (C_USB revision)")
+            return False
         return self.lcd.show_image(str(full_path))
 
     def show_video(self, video_path: str, brightness: int = 32, rotate_180: bool = False,
@@ -341,6 +356,10 @@ class Display:
         full_path = Path(config.MAIN_DIRECTORY) / video_path
         logger.info("Starting video: %s (rotate_180=%s)", full_path, rotate_180)
 
+        if not isinstance(self.lcd, LcdCommTuringUSB):
+            logger.error("show_video is only supported on LcdCommTuringUSB (C_USB revision)")
+            return False
+
         # Create stop event and start video thread
         self.video_stop_event = threading.Event()
         self.video_thread = threading.Thread(
@@ -364,7 +383,7 @@ class Display:
         if self.video_thread and self.video_thread.is_alive():
             self.video_thread.join(timeout=5)
 
-        if hasattr(self.lcd, 'stop_video'):
+        if isinstance(self.lcd, LcdCommTuringUSB):
             self.lcd.stop_video()
 
     def shutdown(self):
@@ -486,7 +505,7 @@ class MultiDisplay:
         self._shutdown_registered = True
 
 
-def create_multi_display() -> MultiDisplay:
+def create_multi_display() -> Optional[MultiDisplay]:
     """Create a MultiDisplay instance from config.
 
     Returns:
