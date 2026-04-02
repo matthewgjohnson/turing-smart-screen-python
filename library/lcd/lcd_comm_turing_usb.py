@@ -29,7 +29,7 @@ import threading
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import usb.core
 import usb.util
@@ -135,7 +135,7 @@ def encrypt_command_packet(data: bytearray) -> bytearray:
     Returns:
         512-byte encrypted packet with trailer bytes
     """
-    encrypted = encrypt_with_des(DES_KEY, data)
+    encrypted = encrypt_with_des(DES_KEY, bytes(data))
     final_packet = bytearray(512)
     final_packet[:len(encrypted)] = encrypted
     final_packet[510] = 0xA1  # Trailer byte 1
@@ -720,7 +720,7 @@ def compress_image(image: Image.Image, ratio: float) -> Image.Image:
     width, height = image.size
     image = image.resize(
         (int(width * ratio * 0.5), int(height * ratio * 0.5)),
-        resample=Image.Resampling.LANCZOS
+        resample=Image.Resampling.LANCZOS  # type: ignore[attr-defined]
     )
     image = image.resize((width, height))
     return image
@@ -794,7 +794,7 @@ def send_layered_image(dev, image_path: str, max_chunk_bytes: int = IMAGE_LAYER_
                 y_start = max(0, height - (i + 1) * h)
                 visible_part = img.crop((0, y_start, width, height - h * i))
                 canvas_height = height - i * h
-                layer_img = Image.new("RGBA", (width, canvas_height), (0, 0, 0, 0))
+                layer_img = Image.new("RGBA", (width, canvas_height), (0, 0, 0, 0))  # type: ignore[arg-type]
                 layer_img.paste(visible_part, (0, y_start))
 
                 logger.info("Sending layer %d/%d (%dx%d)", i + 1, num_layers, width, canvas_height)
@@ -979,7 +979,7 @@ class LcdCommTuringUSB(LcdComm):
         super().__init__(com_port, display_width, display_height, update_queue)
         self.device_selector = device_selector
         self.dev = find_usb_device(device_selector)
-        self.current_state = Image.new("RGBA", (self.get_width(), self.get_height()), (0, 0, 0, 0))
+        self.current_state = Image.new("RGBA", (self.get_width(), self.get_height()), (0, 0, 0, 0))  # type: ignore[arg-type]
 
     def InitializeComm(self):
         """Initialize communication with device."""
@@ -1015,7 +1015,7 @@ class LcdCommTuringUSB(LcdComm):
     def SetOrientation(self, orientation: Orientation):
         """Set display orientation."""
         self.orientation = orientation
-        self.current_state = Image.new("RGBA", (self.get_width(), self.get_height()), (0, 0, 0, 0))
+        self.current_state = Image.new("RGBA", (self.get_width(), self.get_height()), (0, 0, 0, 0))  # type: ignore[arg-type]
 
     def DisplayPILImage(self, image: Image.Image, x: int = 0, y: int = 0,
                         image_width: int = 0, image_height: int = 0):
@@ -1037,18 +1037,18 @@ class LcdCommTuringUSB(LcdComm):
 
         # Rotate based on orientation
         if self.orientation == Orientation.LANDSCAPE:
-            base_image = self.current_state.transpose(Image.Transpose.ROTATE_270)
+            base_image = self.current_state.transpose(Image.Transpose.ROTATE_270)  # type: ignore[attr-defined]
         elif self.orientation == Orientation.REVERSE_LANDSCAPE:
-            base_image = self.current_state.transpose(Image.Transpose.ROTATE_90)
+            base_image = self.current_state.transpose(Image.Transpose.ROTATE_90)  # type: ignore[attr-defined]
         elif self.orientation == Orientation.PORTRAIT:
-            base_image = self.current_state.transpose(Image.Transpose.ROTATE_180)
+            base_image = self.current_state.transpose(Image.Transpose.ROTATE_180)  # type: ignore[attr-defined]
         else:  # REVERSE_PORTRAIT is native orientation
             base_image = self.current_state
 
         encoded = _encode_png(base_image)
         send_image(self.dev, encoded)
 
-    def _video_setup(self, brightness: int, output_path: str):
+    def _video_setup(self, brightness: int, output_path: Union[str, Path]):
         """Send USB setup commands for video playback.
 
         Args:
