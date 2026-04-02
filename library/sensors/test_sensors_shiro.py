@@ -175,10 +175,12 @@ class TestBandwidthCollector(unittest.TestCase):
 
         sensors_shiro.BandwidthCollector._detect_disks()
 
-        self.assertIn('nvme0n1', sensors_shiro.BandwidthCollector._disks)
-        self.assertIn('nvme1n1', sensors_shiro.BandwidthCollector._disks)
-        self.assertNotIn('sda', sensors_shiro.BandwidthCollector._disks)
-        self.assertNotIn('loop0', sensors_shiro.BandwidthCollector._disks)
+        disks = sensors_shiro.BandwidthCollector._disks
+        assert disks is not None, "_detect_disks() should have set _disks"
+        self.assertIn('nvme0n1', disks)
+        self.assertIn('nvme1n1', disks)
+        self.assertNotIn('sda', disks)
+        self.assertNotIn('loop0', disks)
 
     @patch('sensors_shiro.subprocess.run')
     def test_gpu_pcie_uses_separate_cache(self, mock_run):
