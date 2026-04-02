@@ -261,6 +261,8 @@ class BandwidthCollector:
             return
 
         cls._detect_disks()
+        if cls._disks is None:
+            return
 
         try:
             # Disk I/O
@@ -289,7 +291,7 @@ class BandwidthCollector:
                                 pass
 
             # Calculate deltas
-            if cls._prev_disk is not None and cls._prev_time is not None:
+            if cls._prev_disk is not None and cls._prev_net is not None and cls._prev_time is not None:
                 delta_t = now - cls._prev_time
                 if delta_t > 0:
                     delta_read = read_sectors - cls._prev_disk['read']
@@ -752,7 +754,7 @@ class Cpu_Load(CustomDataSource):
             idle = int(parts[3])
             total = sum(int(p) for p in parts[:8])
 
-            if Cpu_Load._prev_idle is not None:
+            if Cpu_Load._prev_idle is not None and Cpu_Load._prev_total is not None:
                 delta_idle = idle - Cpu_Load._prev_idle
                 delta_total = total - Cpu_Load._prev_total
                 if delta_total > 0:
