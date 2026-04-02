@@ -12,7 +12,7 @@ import logging
 import os
 import subprocess
 import time
-from typing import List
+from typing import Dict, List, Optional, Tuple, Union, cast
 
 from library.sensors.sensors_base import CustomDataSource
 
@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 class GpuCollector:
     """Fetches all GPU metrics efficiently via single nvidia-smi call."""
 
-    _cache = {}
-    _last_fetch = 0
-    _cache_ttl = 1.0  # seconds
+    _cache: Dict[int, Dict[str, Union[int, float, str]]] = {}
+    _last_fetch: float = 0
+    _cache_ttl: float = 1.0  # seconds
 
     _query_fields = [
         'temperature.gpu',
@@ -82,7 +82,7 @@ class GpuCollector:
             logger.warning("GpuCollector fetch failed: %s", e)
 
     @classmethod
-    def get(cls, gpu_id: int, metric: str):
+    def get(cls, gpu_id: int, metric: str) -> Union[int, float, str]:
         """Get a specific metric for a GPU."""
         cls._fetch()
         try:
@@ -94,16 +94,16 @@ class GpuCollector:
 class CpuCollector:
     """Fetches CPU temp, power, and fan metrics from hwmon/RAPL."""
 
-    _cache = {}
-    _last_fetch = 0
-    _cache_ttl = 1.0
+    _cache: Dict[str, Union[int, float]] = {}
+    _last_fetch: float = 0
+    _cache_ttl: float = 1.0
 
-    _k10temp_path = None
-    _nct6798_path = None
-    _rapl_path = '/sys/class/powercap/intel-rapl:0'
+    _k10temp_path: Optional[str] = None
+    _nct6798_path: Optional[str] = None
+    _rapl_path: str = '/sys/class/powercap/intel-rapl:0'
 
-    _prev_energy = None
-    _prev_time = None
+    _prev_energy: Optional[int] = None
+    _prev_time: Optional[float] = None
 
     @classmethod
     def _discover_hwmon(cls):
@@ -184,7 +184,7 @@ class CpuCollector:
             logger.warning("CpuCollector fetch failed: %s", e)
 
     @classmethod
-    def get(cls, metric: str):
+    def get(cls, metric: str) -> Union[int, float]:
         """Get a specific CPU metric."""
         cls._fetch()
         return cls._cache.get(metric, -1)
@@ -193,20 +193,20 @@ class CpuCollector:
 class BandwidthCollector:
     """Fetches bandwidth metrics from various sources."""
 
-    _cache = {}
-    _last_fetch = 0
-    _cache_ttl = 1.0
+    _cache: Dict[str, Union[int, float]] = {}
+    _last_fetch: float = 0
+    _cache_ttl: float = 1.0
 
     # Separate cache for GPU PCIe (slow dmon call)
-    _gpu_cache = {'gpu_rx': 0, 'gpu_tx': 0}
-    _gpu_last_fetch = 0
-    _gpu_cache_ttl = 5.0
+    _gpu_cache: Dict[str, Union[int, float]] = {'gpu_rx': 0, 'gpu_tx': 0}
+    _gpu_last_fetch: float = 0
+    _gpu_cache_ttl: float = 5.0
 
-    _prev_disk = None
-    _prev_net = None
-    _prev_time = None
+    _prev_disk: Optional[Dict[str, int]] = None
+    _prev_net: Optional[Dict[str, int]] = None
+    _prev_time: Optional[float] = None
 
-    _disks = None  # Auto-detected
+    _disks: Optional[List[str]] = None  # Auto-detected
 
     @classmethod
     def _detect_disks(cls):
@@ -341,7 +341,7 @@ class BandwidthCollector:
             logger.warning("BandwidthCollector fetch failed: %s", e)
 
     @classmethod
-    def get(cls, metric: str):
+    def get(cls, metric: str) -> Union[int, float]:
         """Get a specific bandwidth metric."""
         if metric in ('gpu_rx', 'gpu_tx'):
             cls._fetch_gpu_pcie()
@@ -356,7 +356,7 @@ class BandwidthCollector:
 
 class Gpu0_Temp(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(0, 'temp')
+        return cast(float, GpuCollector.get(0, 'temp'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -370,8 +370,8 @@ class Gpu0_Temp(CustomDataSource):
 
 class Gpu0_TempMax(CustomDataSource):
     def as_numeric(self) -> float:
-        temp = GpuCollector.get(0, 'temp')
-        headroom = GpuCollector.get(0, 'temp_headroom')
+        temp = cast(float, GpuCollector.get(0, 'temp'))
+        headroom = cast(float, GpuCollector.get(0, 'temp_headroom'))
         if temp < 0 or headroom < 0:
             return -1
         return temp + headroom
@@ -388,7 +388,7 @@ class Gpu0_TempMax(CustomDataSource):
 
 class Gpu0_Fan(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(0, 'fan')
+        return cast(float, GpuCollector.get(0, 'fan'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -402,7 +402,7 @@ class Gpu0_Fan(CustomDataSource):
 
 class Gpu0_Load(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(0, 'load')
+        return cast(float, GpuCollector.get(0, 'load'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -416,7 +416,7 @@ class Gpu0_Load(CustomDataSource):
 
 class Gpu0_Power(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(0, 'power')
+        return cast(float, GpuCollector.get(0, 'power'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -430,7 +430,7 @@ class Gpu0_Power(CustomDataSource):
 
 class Gpu0_PowerMax(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(0, 'power_limit')
+        return cast(float, GpuCollector.get(0, 'power_limit'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -444,7 +444,7 @@ class Gpu0_PowerMax(CustomDataSource):
 
 class Gpu0_Vram(CustomDataSource):
     def as_numeric(self) -> float:
-        val = GpuCollector.get(0, 'vram_used')
+        val = cast(float, GpuCollector.get(0, 'vram_used'))
         if val < 0:
             return -1
         return val / 1024
@@ -461,7 +461,7 @@ class Gpu0_Vram(CustomDataSource):
 
 class Gpu0_VramMax(CustomDataSource):
     def as_numeric(self) -> float:
-        val = GpuCollector.get(0, 'vram_total')
+        val = cast(float, GpuCollector.get(0, 'vram_total'))
         if val < 0:
             return -1
         return val / 1024
@@ -478,11 +478,11 @@ class Gpu0_VramMax(CustomDataSource):
 
 class Gpu0_Pstate(CustomDataSource):
     def as_numeric(self) -> float:
-        pass
+        return 0.0
 
     def as_string(self) -> str:
         val = GpuCollector.get(0, 'pstate')
-        return val if val and val != -1 else "--"
+        return str(val) if val != -1 else "--"
 
     def last_values(self) -> List[float]:
         return []
@@ -490,11 +490,11 @@ class Gpu0_Pstate(CustomDataSource):
 
 class Gpu0_SwPowerCap(CustomDataSource):
     def as_numeric(self) -> float:
-        pass
+        return 0.0
 
     def as_string(self) -> str:
         val = GpuCollector.get(0, 'sw_power_cap')
-        return val if val and val != -1 else "--"
+        return str(val) if val != -1 else "--"
 
     def last_values(self) -> List[float]:
         return []
@@ -506,7 +506,7 @@ class Gpu0_SwPowerCap(CustomDataSource):
 
 class Gpu1_Temp(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(1, 'temp')
+        return cast(float, GpuCollector.get(1, 'temp'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -520,8 +520,8 @@ class Gpu1_Temp(CustomDataSource):
 
 class Gpu1_TempMax(CustomDataSource):
     def as_numeric(self) -> float:
-        temp = GpuCollector.get(1, 'temp')
-        headroom = GpuCollector.get(1, 'temp_headroom')
+        temp = cast(float, GpuCollector.get(1, 'temp'))
+        headroom = cast(float, GpuCollector.get(1, 'temp_headroom'))
         if temp < 0 or headroom < 0:
             return -1
         return temp + headroom
@@ -538,7 +538,7 @@ class Gpu1_TempMax(CustomDataSource):
 
 class Gpu1_Fan(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(1, 'fan')
+        return cast(float, GpuCollector.get(1, 'fan'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -552,7 +552,7 @@ class Gpu1_Fan(CustomDataSource):
 
 class Gpu1_Load(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(1, 'load')
+        return cast(float, GpuCollector.get(1, 'load'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -566,7 +566,7 @@ class Gpu1_Load(CustomDataSource):
 
 class Gpu1_Power(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(1, 'power')
+        return cast(float, GpuCollector.get(1, 'power'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -580,7 +580,7 @@ class Gpu1_Power(CustomDataSource):
 
 class Gpu1_PowerMax(CustomDataSource):
     def as_numeric(self) -> float:
-        return GpuCollector.get(1, 'power_limit')
+        return cast(float, GpuCollector.get(1, 'power_limit'))
 
     def as_string(self) -> str:
         val = self.as_numeric()
@@ -594,7 +594,7 @@ class Gpu1_PowerMax(CustomDataSource):
 
 class Gpu1_Vram(CustomDataSource):
     def as_numeric(self) -> float:
-        val = GpuCollector.get(1, 'vram_used')
+        val = cast(float, GpuCollector.get(1, 'vram_used'))
         if val < 0:
             return -1
         return val / 1024
@@ -611,7 +611,7 @@ class Gpu1_Vram(CustomDataSource):
 
 class Gpu1_VramMax(CustomDataSource):
     def as_numeric(self) -> float:
-        val = GpuCollector.get(1, 'vram_total')
+        val = cast(float, GpuCollector.get(1, 'vram_total'))
         if val < 0:
             return -1
         return val / 1024
@@ -628,11 +628,11 @@ class Gpu1_VramMax(CustomDataSource):
 
 class Gpu1_Pstate(CustomDataSource):
     def as_numeric(self) -> float:
-        pass
+        return 0.0
 
     def as_string(self) -> str:
         val = GpuCollector.get(1, 'pstate')
-        return val if val and val != -1 else "--"
+        return str(val) if val != -1 else "--"
 
     def last_values(self) -> List[float]:
         return []
@@ -640,11 +640,11 @@ class Gpu1_Pstate(CustomDataSource):
 
 class Gpu1_SwPowerCap(CustomDataSource):
     def as_numeric(self) -> float:
-        pass
+        return 0.0
 
     def as_string(self) -> str:
         val = GpuCollector.get(1, 'sw_power_cap')
-        return val if val and val != -1 else "--"
+        return str(val) if val != -1 else "--"
 
     def last_values(self) -> List[float]:
         return []
@@ -740,9 +740,9 @@ class Cpu_Intake(CustomDataSource):
 
 class Cpu_Load(CustomDataSource):
     """CPU load from /proc/stat."""
-    _prev_idle = None
-    _prev_total = None
-    _load = 0
+    _prev_idle: Optional[int] = None
+    _prev_total: Optional[int] = None
+    _load: float = 0
 
     def as_numeric(self) -> float:
         try:
