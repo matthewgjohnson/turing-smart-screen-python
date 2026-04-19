@@ -257,9 +257,9 @@ class LcdComm(ABC):
         font_color = parse_color(font_color)
         background_color = parse_color(background_color)
 
-        assert x <= self.get_width(), 'Text "' + text + '" X coordinate ' + str(x) + ' must be <= display width ' + str(
+        assert x <= self.get_width(), 'Text X coordinate ' + str(x) + ' must be <= display width ' + str(
             self.get_width())
-        assert y <= self.get_height(), 'Text "' + text + '" Y coordinate ' + str(y) + ' must be <= display height ' + str(
+        assert y <= self.get_height(), 'Text Y coordinate ' + str(y) + ' must be <= display height ' + str(
             self.get_height())
         assert len(text) > 0, 'Text must not be empty'
         assert font_size > 0, "Font size must be > 0"
@@ -291,21 +291,23 @@ class LcdComm(ABC):
             left, top = math.floor(left), math.floor(top)
             right, bottom = math.ceil(right), math.ceil(bottom)
         else:
-            left, top, right, bottom = x, y, x + width, y + height
-
-            if anchor.startswith("m"):
-                x = int((right + left) / 2)
-            elif anchor.startswith("r"):
-                x = right
+            # Calculate bounding box based on anchor type
+            # For right-anchor, x is the RIGHT edge, so left = x - width
+            # For middle-anchor, x is the CENTER, so left = x - width/2
+            # For left-anchor, x is the LEFT edge, so left = x
+            if anchor.startswith("r"):
+                left, right = x - width, x
+            elif anchor.startswith("m"):
+                left, right = x - width // 2, x + width // 2
             else:
-                x = left
+                left, right = x, x + width
 
-            if anchor.endswith("m"):
-                y = int((bottom + top) / 2)
-            elif anchor.endswith("b"):
-                y = bottom
+            if anchor.endswith("b"):
+                top, bottom = y - height, y
+            elif anchor.endswith("m"):
+                top, bottom = y - height // 2, y + height // 2
             else:
-                y = top
+                top, bottom = y, y + height
 
         # Draw text onto the background image with specified color & font
         d.text((x, y), text, font=ttfont, fill=font_color, align=align, anchor=anchor)
@@ -326,8 +328,7 @@ class LcdComm(ABC):
                            bar_color: Color = (0, 0, 0),
                            bar_outline: bool = True,
                            background_color: Color = (255, 255, 255),
-                           background_image: Optional[str] = None,
-                           reverse_direction: Optional[bool] = False):
+                           background_image: Optional[str] = None):
         # Generate a progress bar and display it
         # Provide the background image path to display progress bar with transparent background
 
@@ -358,33 +359,11 @@ class LcdComm(ABC):
             bar_image = bar_image.crop(box=(x, y, x + width, y + height))
 
         # Draw progress bar
-        if width > height:
-            bar_filled_width = (value / (max_value - min_value) * width) - 1
-            if bar_filled_width < 0:
-                bar_filled_width = 0
-        else:
-            bar_filled_height = (value / (max_value - min_value) * height) - 1
-            if bar_filled_height < 0:
-                bar_filled_height = 0
+        bar_filled_width = ((value - min_value) / (max_value - min_value) * width) - 1
+        if bar_filled_width < 0:
+            bar_filled_width = 0
         draw = ImageDraw.Draw(bar_image)
-
-        # most common setting
-        x1 = 0
-        y1 = 0
-        x2 = width - 1
-        y2 = height - 1
-
-        if width > height:
-            if reverse_direction is True:
-                x1 = width - 1 - bar_filled_width
-            else:
-                x2 = bar_filled_width
-        else:
-            if reverse_direction is True:
-                y2 = bar_filled_height
-            else:
-                y1 = height - 1 - bar_filled_height
-        draw.rectangle([x1, y1, x2, y2], fill=bar_color, outline=bar_color)
+        draw.rectangle([0, 0, bar_filled_width, height - 1], fill=bar_color, outline=bar_color)
 
         if bar_outline:
             # Draw outline
@@ -404,8 +383,7 @@ class LcdComm(ABC):
                          axis_font: str = "./res/fonts/roboto/Roboto-Black.ttf",
                          axis_font_size: int = 10,
                          background_color: Color = (255, 255, 255),
-                         background_image: Optional[str] = None,
-                         axis_minmax_format: str = "{:0.0f}"):
+                         background_image: Optional[str] = None):
         # Generate a plot graph and display it
         # Provide the background image path to display plot graph with transparent background
 
@@ -445,7 +423,7 @@ class LcdComm(ABC):
 
         step = width / len(values)
         # pre compute yScale multiplier value
-        yScale = (height / (max_value - min_value)) if (max_value - min_value) != 0 else 0
+        yScale = height / (max_value - min_value)
 
         plotsX = []
         plotsY = []
@@ -476,13 +454,13 @@ class LcdComm(ABC):
 
             # Draw Legend
             draw.line([0, 0, 1, 0], fill=axis_color)
-            text = axis_minmax_format.format(max_value)
+            text = f"{int(max_value)}"
             ttfont = self.open_font(axis_font, axis_font_size)
             _, top, right, bottom = ttfont.getbbox(text)
             draw.text((2, 0 - top), text,
                       font=ttfont, fill=axis_color)
 
-            text = axis_minmax_format.format(min_value)
+            text = f"{int(min_value)}"
             _, top, right, bottom = ttfont.getbbox(text)
             draw.text((width - 1 - right, height - 2 - bottom), text,
                       font=ttfont, fill=axis_color)
