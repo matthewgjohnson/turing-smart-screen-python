@@ -23,183 +23,273 @@
 import sched
 import threading
 import time
-from datetime import timedelta
-from functools import wraps
 
 import library.config as config
 import library.stats as stats
+from library.display import get_all_displays
 
 STOPPING = False
 
-
-def async_job(threadname=None):
-    """ wrapper to handle asynchronous threads """
-
-    def decorator(func):
-        """ Decorator to extend async_func """
-
-        @wraps(func)
-        def async_func(*args, **kwargs):
-            """ create an asynchronous function to wrap around our thread """
-            func_hl = threading.Thread(target=func, name=threadname, args=args, kwargs=kwargs)
-            func_hl.start()
-            return func_hl
-
-        return async_func
-
-    return decorator
+# Computed intervals from all displays (populated by compute_intervals())
+_intervals = {}
 
 
-def schedule(interval):
-    """ wrapper to schedule asynchronous threads """
+def compute_intervals():
+    """
+    Compute scheduler intervals by scanning ALL display templates.
+    For each stat, use the minimum non-zero interval across all displays.
+    This ensures stats run frequently enough for the display that needs them most.
+    """
+    global _intervals
+    _intervals = {}
+    
+    # Stat paths to scan: (key_name, theme_path)
+    stat_paths = [
+        ('CPU_PERCENTAGE', ['STATS', 'CPU', 'PERCENTAGE']),
+        ('CPU_FREQUENCY', ['STATS', 'CPU', 'FREQUENCY']),
+        ('CPU_LOAD', ['STATS', 'CPU', 'LOAD']),
+        ('CPU_TEMPERATURE', ['STATS', 'CPU', 'TEMPERATURE']),
+        ('CPU_FAN_SPEED', ['STATS', 'CPU', 'FAN_SPEED']),
+        ('GPU', ['STATS', 'GPU']),
+        ('MEMORY', ['STATS', 'MEMORY']),
+        ('DISK', ['STATS', 'DISK']),
+        ('NET', ['STATS', 'NET']),
+        ('DATE', ['STATS', 'DATE']),
+        ('UPTIME', ['STATS', 'UPTIME']),
+        ('CUSTOM', ['STATS', 'CUSTOM']),
+        ('WEATHER', ['STATS', 'WEATHER']),
+        ('PING', ['STATS', 'PING']),
+    ]
+    
+    displays = get_all_displays()
+    
+    for stat_name, path in stat_paths:
+        min_interval = None
+        
+        for disp in displays:
+            # Navigate the theme data path
+            data = disp.theme_data
+            for key in path:
+                data = data.get(key, {}) if isinstance(data, dict) else {}
+            
+            if data:
+                interval = data.get('INTERVAL', 0)
+                if interval > 0:
+                    if min_interval is None or interval < min_interval:
+                        min_interval = interval
+        
+        # Store the minimum interval found (or 0 if no display needs this stat)
+        _intervals[stat_name] = min_interval if min_interval else 0
+    
+    # Weather has a minimum of 300 seconds (API rate limiting)
+    if _intervals.get('WEATHER', 0) > 0:
+        _intervals['WEATHER'] = max(300, _intervals['WEATHER'])
+    
+    return _intervals
 
-    def decorator(func):
-        """ Decorator to extend periodic """
 
-        def periodic(scheduler, periodic_interval, action, actionargs=()):
-            """ Wrap the scheduler with our periodic interval """
+def get_interval(stat_name):
+    """Get computed interval for a stat. Returns 0 if stat not needed."""
+    return _intervals.get(stat_name, 0)
+
+
+def _run_scheduled(interval_seconds, func, thread_name):
+    """Run a function on a repeating schedule in its own thread."""
+    if interval_seconds <= 0:
+        return None
+    
+    def thread_func():
+        scheduler = sched.scheduler(time.time, time.sleep)
+        
+        def periodic(sc, interval, action):
             if not STOPPING:
-                # If the program is not stopping: re-schedule the task for future execution
-                scheduler.enter(periodic_interval, 1, periodic,
-                                (scheduler, periodic_interval, action, actionargs))
-            action(*actionargs)
-
-        @wraps(func)
-        def wrap(
-                *args,
-                **kwargs
-        ):
-            """ Wrapper to create our schedule and run it at the appropriate time """
-            if interval == 0:
-                return
-            scheduler = sched.scheduler(time.time, time.sleep)
-            periodic(scheduler, interval, func)
-            scheduler.run()
-
-        return wrap
-
-    return decorator
+                sc.enter(interval, 1, periodic, (sc, interval, action))
+            action()
+        
+        periodic(scheduler, interval_seconds, func)
+        scheduler.run()
+    
+    thread = threading.Thread(target=thread_func, name=thread_name, daemon=False)
+    thread.start()
+    return thread
 
 
-@async_job("CPU_Percentage")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS']['CPU']['PERCENTAGE'].get("INTERVAL", 0)).total_seconds())
-def CPUPercentage():
-    """ Refresh the CPU Percentage """
-    # logger.debug("Refresh CPU Percentage")
+# Stat functions (no decorators - intervals determined at runtime)
+
+def _cpu_percentage():
     stats.CPU.percentage()
 
-
-@async_job("CPU_Frequency")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS']['CPU']['FREQUENCY'].get("INTERVAL", 0)).total_seconds())
-def CPUFrequency():
-    """ Refresh the CPU Frequency """
-    # logger.debug("Refresh CPU Frequency")
+def _cpu_frequency():
     stats.CPU.frequency()
 
-
-@async_job("CPU_Load")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS']['CPU']['LOAD'].get("INTERVAL", 0)).total_seconds())
-def CPULoad():
-    """ Refresh the CPU Load """
-    # logger.debug("Refresh CPU Load")
+def _cpu_load():
     stats.CPU.load()
 
-
-@async_job("CPU_Load")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS']['CPU']['TEMPERATURE'].get("INTERVAL", 0)).total_seconds())
-def CPUTemperature():
-    """ Refresh the CPU Temperature """
-    # logger.debug("Refresh CPU Temperature")
+def _cpu_temperature():
     stats.CPU.temperature()
 
-
-@async_job("CPU_FanSpeed")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS']['CPU']['FAN_SPEED'].get("INTERVAL", 0)).total_seconds())
-def CPUFanSpeed():
-    """ Refresh the CPU Fan Speed """
-    # logger.debug("Refresh CPU Fan Speed")
+def _cpu_fan_speed():
     stats.CPU.fan_speed()
 
-
-@async_job("GPU_Stats")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS'].get('GPU', {}).get("INTERVAL", 0)).total_seconds())
-def GpuStats():
-    """ Refresh the GPU Stats """
-    # logger.debug("Refresh GPU Stats")
+def _gpu_stats():
     stats.Gpu.stats()
 
-
-@async_job("Memory_Stats")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS'].get('MEMORY', {}).get("INTERVAL", 0)).total_seconds())
-def MemoryStats():
-    # logger.debug("Refresh memory stats")
+def _memory_stats():
     stats.Memory.stats()
 
-
-@async_job("Disk_Stats")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS'].get('DISK', {}).get("INTERVAL", 0)).total_seconds())
-def DiskStats():
-    # logger.debug("Refresh disk stats")
+def _disk_stats():
     stats.Disk.stats()
 
-
-@async_job("Net_Stats")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS'].get('NET', {}).get("INTERVAL", 0)).total_seconds())
-def NetStats():
-    # logger.debug("Refresh net stats")
+def _net_stats():
     stats.Net.stats()
 
-
-@async_job("Date_Stats")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS'].get('DATE', {}).get("INTERVAL", 0)).total_seconds())
-def DateStats():
-    # logger.debug("Refresh date stats")
+def _date_stats():
     stats.Date.stats()
 
-
-@async_job("SystemUptime_Stats")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS'].get('UPTIME', {}).get("INTERVAL", 0)).total_seconds())
-def SystemUptimeStats():
-    # logger.debug("Refresh system uptime stats")
+def _uptime_stats():
     stats.SystemUptime.stats()
 
-
-@async_job("Custom_Stats")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS'].get('CUSTOM', {}).get("INTERVAL", 0)).total_seconds())
-def CustomStats():
-    # print("Refresh custom stats")
+def _custom_stats():
     stats.Custom.stats()
 
-
-@async_job("Weather_Stats")
-@schedule(timedelta(seconds=max(300.0, config.THEME_DATA['STATS'].get('WEATHER', {}).get("INTERVAL", 0))).total_seconds())
-def WeatherStats():
-    # logger.debug("Refresh Weather data")
+def _weather_stats():
     stats.Weather.stats()
 
-
-@async_job("Ping_Stats")
-@schedule(timedelta(seconds=config.THEME_DATA['STATS'].get('PING', {}).get("INTERVAL", 0)).total_seconds())
-def PingStats():
-    # logger.debug("Refresh Ping data")
+def _ping_stats():
     stats.Ping.stats()
 
-
-@async_job("Queue_Handler")
-@schedule(timedelta(milliseconds=1).total_seconds())
-def QueueHandler():
-    # Do next action waiting in the queue
+def _queue_handler():
     if STOPPING:
-        # Empty the action queue to allow program to exit cleanly
         while not config.update_queue.empty():
             f, args = config.update_queue.get()
             f(*args)
     else:
-        # Execute first action in the queue
         f, args = config.update_queue.get()
         if f:
             f(*args)
 
 
+# Registry mapping stat names to functions
+_STAT_FUNCTIONS = {
+    'CPU_PERCENTAGE': _cpu_percentage,
+    'CPU_FREQUENCY': _cpu_frequency,
+    'CPU_LOAD': _cpu_load,
+    'CPU_TEMPERATURE': _cpu_temperature,
+    'CPU_FAN_SPEED': _cpu_fan_speed,
+    'GPU': _gpu_stats,
+    'MEMORY': _memory_stats,
+    'DISK': _disk_stats,
+    'NET': _net_stats,
+    'DATE': _date_stats,
+    'UPTIME': _uptime_stats,
+    'CUSTOM': _custom_stats,
+    'WEATHER': _weather_stats,
+    'PING': _ping_stats,
+}
+
+
+def start_all(stagger_delay=0.25):
+    """
+    Start all stat schedulers based on computed intervals from all displays.
+    Call this AFTER all displays are initialized.
+    
+    Args:
+        stagger_delay: Seconds to wait between starting each scheduler (default 0.25)
+    """
+    import time as time_module
+    
+    # Compute intervals from all display templates
+    intervals = compute_intervals()
+    
+    threads = []
+    
+    # Start stats in a specific order with staggering to avoid overwhelming the system
+    stat_order = [
+        'CPU_PERCENTAGE',
+        'CPU_FREQUENCY', 
+        'CPU_LOAD',
+        'CPU_TEMPERATURE',
+        'CPU_FAN_SPEED',
+        'GPU',  # Will be skipped if GPU not available
+        'MEMORY',
+        'DISK',
+        'NET',
+        'DATE',
+        'UPTIME',
+        'CUSTOM',
+        'WEATHER',
+        'PING',
+    ]
+    
+    for stat_name in stat_order:
+        interval = get_interval(stat_name)
+        if interval <= 0:
+            continue
+            
+        # Check GPU availability
+        if stat_name == 'GPU':
+            if not stats.Gpu.is_available():
+                continue
+        
+        func = _STAT_FUNCTIONS.get(stat_name)
+        if func:
+            thread = _run_scheduled(interval, func, f"{stat_name}_Stats")
+            if thread:
+                threads.append(thread)
+            time_module.sleep(stagger_delay)
+    
+    # Queue handler always runs (1ms interval)
+    _run_scheduled(0.001, _queue_handler, "Queue_Handler")
+    
+    return threads
+
+
 def is_queue_empty() -> bool:
     return config.update_queue.empty()
+
+
+# Legacy function names for backward compatibility (if called directly)
+def CPUPercentage():
+    _run_scheduled(get_interval('CPU_PERCENTAGE'), _cpu_percentage, "CPU_Percentage")
+
+def CPUFrequency():
+    _run_scheduled(get_interval('CPU_FREQUENCY'), _cpu_frequency, "CPU_Frequency")
+
+def CPULoad():
+    _run_scheduled(get_interval('CPU_LOAD'), _cpu_load, "CPU_Load")
+
+def CPUTemperature():
+    _run_scheduled(get_interval('CPU_TEMPERATURE'), _cpu_temperature, "CPU_Temperature")
+
+def CPUFanSpeed():
+    _run_scheduled(get_interval('CPU_FAN_SPEED'), _cpu_fan_speed, "CPU_FanSpeed")
+
+def GpuStats():
+    _run_scheduled(get_interval('GPU'), _gpu_stats, "GPU_Stats")
+
+def MemoryStats():
+    _run_scheduled(get_interval('MEMORY'), _memory_stats, "Memory_Stats")
+
+def DiskStats():
+    _run_scheduled(get_interval('DISK'), _disk_stats, "Disk_Stats")
+
+def NetStats():
+    _run_scheduled(get_interval('NET'), _net_stats, "Net_Stats")
+
+def DateStats():
+    _run_scheduled(get_interval('DATE'), _date_stats, "Date_Stats")
+
+def SystemUptimeStats():
+    _run_scheduled(get_interval('UPTIME'), _uptime_stats, "SystemUptime_Stats")
+
+def CustomStats():
+    _run_scheduled(get_interval('CUSTOM'), _custom_stats, "Custom_Stats")
+
+def WeatherStats():
+    _run_scheduled(get_interval('WEATHER'), _weather_stats, "Weather_Stats")
+
+def PingStats():
+    _run_scheduled(get_interval('PING'), _ping_stats, "Ping_Stats")
+
+def QueueHandler():
+    _run_scheduled(0.001, _queue_handler, "Queue_Handler")
