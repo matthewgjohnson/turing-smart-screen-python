@@ -18,430 +18,111 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import json
+import math
 import os
 import platform
 import queue
-import shutil
 import struct
 import subprocess
-import sys
+import threading
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import usb.core
 import usb.util
 from Crypto.Cipher import DES
 from PIL import Image
 
-from library.lcd.lcd_comm import Orientation, LcdComm
 from library.log import logger
+from library.lcd.lcd_comm import Orientation, LcdComm
 
-VENDOR_ID = 0x1cbe
+# =============================================================================
+# USB Device Constants
+# =============================================================================
+VENDOR_ID = 0x1CBE
+PRODUCT_ID = 0x0088
 
-# Map of display supported product IDs and their respective resolution in portrait mode
-PRODUCT_ID = {0x0046: (320, 960),  # Turing 4.6"
-    0x0050: (720, 1280),  # Turing 5.2"
-    0x0080: (800, 1280),  # Turing 8.0"
-    0x0088: (480, 1920),  # Turing 8.8"
-    0x0092: (462, 1920),  # Turing 9.2"
-    0x0123: (720, 1920),  # Turing 12.3"
-}
+# =============================================================================
+# Protocol Constants - Command IDs
+# =============================================================================
+CMD_SYNC = 10
+CMD_RESTART = 11
+CMD_UNKNOWN_13 = 13  # Used in video setup
+CMD_BRIGHTNESS = 14
+CMD_FRAME_RATE = 15
+CMD_OPEN_FILE = 38
+CMD_WRITE_FILE = 39
+CMD_DELETE_FILE = 40
+CMD_UNKNOWN_41 = 41  # Used in video setup
+CMD_PLAY = 98
+CMD_REFRESH_STORAGE = 100
+CMD_SEND_IMAGE = 102
+CMD_PLAY_ALT = 110
+CMD_UNKNOWN_111 = 111  # Video setup/stop
+CMD_UNKNOWN_112 = 112  # Video setup/stop
+CMD_PLAY_IMAGE = 113
+CMD_SEND_VIDEO_CHUNK = 121
+CMD_DELAY = 122
+CMD_VIDEO_STOP = 123
+CMD_SAVE_SETTINGS = 125
 
-MAX_CHUNK_BYTES = 1024 * 1024  # Data sent to screen cannot exceed 1024MB or there will be a timeout
+# =============================================================================
+# Transfer Constants
+# =============================================================================
+MAX_CHUNK_BYTES = 1024 * 1024  # 1MB max transfer size
+VIDEO_CHUNK_SIZE = 202752  # ~202KB per video chunk
+IMAGE_LAYER_MAX_BYTES = 524288  # 512KB max per image layer
+DES_KEY = b'slv3tuzx'
 
-# Command IDs used by the vendor protocol (subset)
-CMD_UPLOAD_JPEG = 101
-CMD_UPLOAD_PNG = 102
-CMD_GET_H264_CHUNK_SIZE = 17
-CMD_PLAY_H264_CHUNK = 121
-CMD_GET_STREAM_STATUS = 122
-CMD_STOP_STREAM = 123
+# =============================================================================
+# Display Constants
+# =============================================================================
+DISPLAY_WIDTH = 480
+DISPLAY_HEIGHT = 1920
+DISPLAY_FPS = 25
 
-# Default max payload for frame uploads (device/transport limit)
-MAX_IMAGE_PAYLOAD_DEFAULT = MAX_CHUNK_BYTES
+# =============================================================================
+# Retry/Timeout Constants
+# =============================================================================
+USB_WRITE_TIMEOUT = 2000
+USB_READ_TIMEOUT = 2000
+USB_RETRY_COUNT = 3
+USB_RETRY_DELAY = 0.5
 
-
-def _resp_ok(resp: Optional[bytes]) -> bool:
-    if not resp:
-        return False
-    b1 = resp[1] if len(resp) > 1 else None
-    b8 = resp[8] if len(resp) > 8 else None
-    return (b1 == 0xC8) or (b8 == 0xC8)
-
-
-def send_jpeg(dev, jpeg_data: bytes):
-    img_size = len(jpeg_data)
-    cmd_packet = build_command_packet_header(CMD_UPLOAD_JPEG)
-    cmd_packet[8] = (img_size >> 24) & 0xFF
-    cmd_packet[9] = (img_size >> 16) & 0xFF
-    cmd_packet[10] = (img_size >> 8) & 0xFF
-    cmd_packet[11] = img_size & 0xFF
-    full_payload = encrypt_command_packet(cmd_packet) + jpeg_data
-    return write_to_device(dev, full_payload)
-
-
-def _encode_jpeg_under_limit(image: Image.Image, *, max_bytes: int, quality: int = 95,
-        subsampling: int = -1, ) -> bytes:
-    if subsampling not in (-1, 0, 1, 2):
-        raise ValueError("subsampling must be one of: -1, 0, 1, 2")
-    img = image
-    if img.mode not in ("RGB", "L"):
-        img = img.convert("RGB")
-    elif img.mode == "L":
-        img = img.convert("RGB")
-
-    subs = (2, 1, 0) if subsampling == -1 else (subsampling,)
-    best = b""
-    for sub in subs:
-        q = int(quality)
-        while q >= 1:
-            buf = BytesIO()
-            try:
-                img.save(buf, format="JPEG", quality=q, optimize=False, progressive=False, subsampling=sub, )
-            except TypeError:
-                img.save(buf, format="JPEG", quality=q, optimize=False, progressive=False)
-            data = buf.getvalue()
-            if not best or len(data) < len(best):
-                best = data
-            if len(data) <= max_bytes:
-                return data
-            q = q - 5 if q > 10 else q - 1
-
-    raise RuntimeError(f"Could not transcode JPEG under max_bytes: {len(best)} > {max_bytes}")
+# =============================================================================
+# Cache Directory
+# =============================================================================
+CACHE_DIR = Path("/tmp/turing-screen-cache")
 
 
-def send_pil_image_auto(dev, image: Image.Image, *, max_bytes: int = MAX_IMAGE_PAYLOAD_DEFAULT, ) -> None:
-    # First try PNG (preferred)
-    png = _encode_png(image)
-    if len(png) <= max_bytes:
-        send_image(dev, png)
-        return
-    # Fallback to JPEG when over limit (default behavior)
-    jpg = _encode_jpeg_under_limit(image, max_bytes=max_bytes, quality=90, subsampling=-1)
-    send_jpeg(dev, jpg)
+def _ensure_cache_dir():
+    """Ensure cache directory exists."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# ---- MP4 parsing + Annex-B extraction (pure Python fallback) ----
-from dataclasses import dataclass
-from typing import Iterable, Set
+def build_command_packet_header(cmd_id: int) -> bytearray:
+    """Build a 500-byte command packet header.
 
+    Args:
+        cmd_id: Command ID (see CMD_* constants)
 
-def _u32be(b: bytes, off: int = 0) -> int:
-    return int.from_bytes(b[off:off + 4], "big", signed=False)
-
-
-def _u64be(b: bytes, off: int = 0) -> int:
-    return int.from_bytes(b[off:off + 8], "big", signed=False)
-
-
-def _iter_mp4_boxes(data: bytes, start: int, end: int) -> Iterable[tuple[bytes, int, int]]:
-    i = start
-    while i + 8 <= end:
-        size = _u32be(data, i)
-        typ = data[i + 4:i + 8]
-        hdr = 8
-        if size == 1:
-            if i + 16 > end:
-                break
-            size = _u64be(data, i + 8)
-            hdr = 16
-        elif size == 0:
-            size = end - i
-        if size < hdr:
-            break
-        j = i + int(size)
-        if j > end:
-            break
-        yield typ, i + hdr, j
-        i = j
-
-
-def _mp4_find_box(data: bytes, start: int, end: int, typ: bytes) -> Optional[tuple[int, int]]:
-    for t, ps, pe in _iter_mp4_boxes(data, start, end):
-        if t == typ:
-            return ps, pe
-    return None
-
-
-@dataclass
-class _Mp4H264Track:
-    nal_len_size: int
-    sps_list: list[bytes]
-    pps_list: list[bytes]
-    sample_sizes: list[int]
-    chunk_offsets: list[int]
-    stsc: list[tuple[int, int, int]]  # (first_chunk, samples_per_chunk, sample_desc_idx)
-    sync_samples: Optional[Set[int]]
-
-
-def _mp4_parse_avcc(avcc: bytes) -> tuple[int, list[bytes], list[bytes]]:
-    if len(avcc) < 7:
-        raise ValueError("avcC too small")
-    nal_len_size = (avcc[4] & 0x03) + 1
-    num_sps = avcc[5] & 0x1F
-    off = 6
-    sps_list: list[bytes] = []
-    for _ in range(num_sps):
-        if off + 2 > len(avcc):
-            raise ValueError("avcC truncated (SPS length)")
-        n = int.from_bytes(avcc[off:off + 2], "big")
-        off += 2
-        if off + n > len(avcc):
-            raise ValueError("avcC truncated (SPS data)")
-        sps_list.append(avcc[off:off + n])
-        off += n
-    if off + 1 > len(avcc):
-        raise ValueError("avcC truncated (PPS count)")
-    num_pps = avcc[off]
-    off += 1
-    pps_list: list[bytes] = []
-    for _ in range(num_pps):
-        if off + 2 > len(avcc):
-            raise ValueError("avcC truncated (PPS length)")
-        n = int.from_bytes(avcc[off:off + 2], "big")
-        off += 2
-        if off + n > len(avcc):
-            raise ValueError("avcC truncated (PPS data)")
-        pps_list.append(avcc[off:off + n])
-        off += n
-    return nal_len_size, sps_list, pps_list
-
-
-def _mp4_load_moov(path: str) -> bytes:
-    with open(path, "rb") as f:
-        f.seek(0, os.SEEK_END)
-        file_size = f.tell()
-        f.seek(0, os.SEEK_SET)
-        while f.tell() + 8 <= file_size:
-            off0 = f.tell()
-            hdr = f.read(8)
-            if len(hdr) < 8:
-                break
-            size = _u32be(hdr, 0)
-            typ = hdr[4:8]
-            hdr_size = 8
-            if size == 1:
-                ext = f.read(8)
-                if len(ext) < 8:
-                    break
-                size = _u64be(ext, 0)
-                hdr_size = 16
-            elif size == 0:
-                size = file_size - off0
-            if size < hdr_size:
-                break
-            payload_size = int(size) - hdr_size
-            if typ == b"moov":
-                return f.read(payload_size)
-            f.seek(payload_size, os.SEEK_CUR)
-    raise ValueError("MP4: moov box not found")
-
-
-def _mp4_pick_h264_video_track(moov: bytes) -> _Mp4H264Track:
-    moov_start = 0
-    moov_end = len(moov)
-    for t_trak, trak_ps, trak_pe in _iter_mp4_boxes(moov, moov_start, moov_end):
-        if t_trak != b"trak":
-            continue
-        mdia = _mp4_find_box(moov, trak_ps, trak_pe, b"mdia")
-        if mdia is None:
-            continue
-        mdia_ps, mdia_pe = mdia
-        hdlr = _mp4_find_box(moov, mdia_ps, mdia_pe, b"hdlr")
-        if hdlr is None:
-            continue
-        hdlr_ps, hdlr_pe = hdlr
-        hdlr_payload = moov[hdlr_ps:hdlr_pe]
-        if len(hdlr_payload) < 12 or hdlr_payload[8:12] != b"vide":
-            continue
-
-        minf = _mp4_find_box(moov, mdia_ps, mdia_pe, b"minf")
-        if minf is None:
-            continue
-        stbl = _mp4_find_box(moov, minf[0], minf[1], b"stbl")
-        if stbl is None:
-            continue
-        stbl_ps, stbl_pe = stbl
-
-        stsd = _mp4_find_box(moov, stbl_ps, stbl_pe, b"stsd")
-        stsz = _mp4_find_box(moov, stbl_ps, stbl_pe, b"stsz")
-        stsc = _mp4_find_box(moov, stbl_ps, stbl_pe, b"stsc")
-        stco = _mp4_find_box(moov, stbl_ps, stbl_pe, b"stco")
-        co64 = _mp4_find_box(moov, stbl_ps, stbl_pe, b"co64")
-        stss = _mp4_find_box(moov, stbl_ps, stbl_pe, b"stss")
-        if stsd is None or stsz is None or stsc is None or (stco is None and co64 is None):
-            continue
-
-        stsd_payload = moov[stsd[0]:stsd[1]]
-        if len(stsd_payload) < 8:
-            continue
-        entry_count = _u32be(stsd_payload, 4)
-        off = 8
-        found = False
-        nal_len_size = 4
-        sps_list: list[bytes] = []
-        pps_list: list[bytes] = []
-        for _ in range(entry_count):
-            if off + 8 > len(stsd_payload):
-                break
-            ent_size = _u32be(stsd_payload, off)
-            fmt = stsd_payload[off + 4:off + 8]
-            ent_end = off + int(ent_size)
-            if ent_size < 8 or ent_end > len(stsd_payload):
-                break
-            if fmt in (b"avc1", b"avc3"):
-                child_start = off + 8 + 78
-                if child_start < ent_end:
-                    for t2, ps2, pe2 in _iter_mp4_boxes(stsd_payload, child_start, ent_end):
-                        if t2 == b"avcC":
-                            nal_len_size, sps_list, pps_list = _mp4_parse_avcc(stsd_payload[ps2:pe2])
-                            found = True
-                            break
-            elif fmt in (b"hvc1", b"hev1"):
-                raise ValueError("MP4 contains HEVC/H.265; device expects H.264")
-            if found:
-                break
-            off = ent_end
-        if not found:
-            continue
-
-        stsz_payload = moov[stsz[0]:stsz[1]]
-        if len(stsz_payload) < 12:
-            continue
-        fixed_size = _u32be(stsz_payload, 4)
-        sample_count = _u32be(stsz_payload, 8)
-        sample_sizes: list[int] = []
-        if fixed_size:
-            sample_sizes = [int(fixed_size)] * int(sample_count)
-        else:
-            need = 12 + int(sample_count) * 4
-            if len(stsz_payload) < need:
-                continue
-            off2 = 12
-            for _ in range(int(sample_count)):
-                sample_sizes.append(int(_u32be(stsz_payload, off2)))
-                off2 += 4
-
-        if stco is not None:
-            stco_payload = moov[stco[0]:stco[1]]
-            if len(stco_payload) < 8:
-                continue
-            n = _u32be(stco_payload, 4)
-            need = 8 + int(n) * 4
-            if len(stco_payload) < need:
-                continue
-            chunk_offsets = [int(_u32be(stco_payload, 8 + 4 * i)) for i in range(int(n))]
-        else:
-            co64_payload = moov[co64[0]:co64[1]]  # type: ignore[index]
-            if len(co64_payload) < 8:
-                continue
-            n = _u32be(co64_payload, 4)
-            need = 8 + int(n) * 8
-            if len(co64_payload) < need:
-                continue
-            chunk_offsets = [int(_u64be(co64_payload, 8 + 8 * i)) for i in range(int(n))]
-
-        stsc_payload = moov[stsc[0]:stsc[1]]
-        if len(stsc_payload) < 8:
-            continue
-        n = _u32be(stsc_payload, 4)
-        need = 8 + int(n) * 12
-        if len(stsc_payload) < need:
-            continue
-        stsc_entries: list[tuple[int, int, int]] = []
-        off3 = 8
-        for _ in range(int(n)):
-            first_chunk = int(_u32be(stsc_payload, off3))
-            samples_per_chunk = int(_u32be(stsc_payload, off3 + 4))
-            desc_idx = int(_u32be(stsc_payload, off3 + 8))
-            stsc_entries.append((first_chunk, samples_per_chunk, desc_idx))
-            off3 += 12
-        stsc_entries.sort(key=lambda x: x[0])
-
-        sync_samples: Optional[Set[int]] = None
-        if stss is not None:
-            stss_payload = moov[stss[0]:stss[1]]
-            if len(stss_payload) >= 8:
-                n2 = _u32be(stss_payload, 4)
-                need = 8 + int(n2) * 4
-                if len(stss_payload) >= need:
-                    sync_samples = set(int(_u32be(stss_payload, 8 + 4 * i)) for i in range(int(n2)))
-
-        return _Mp4H264Track(nal_len_size=int(nal_len_size), sps_list=sps_list, pps_list=pps_list,
-            sample_sizes=sample_sizes, chunk_offsets=chunk_offsets, stsc=stsc_entries, sync_samples=sync_samples, )
-
-    raise ValueError("MP4: no H.264 video track found")
-
-
-def _mp4_iter_sample_locations(track: _Mp4H264Track) -> Iterable[tuple[int, int, int]]:
-    sizes = track.sample_sizes
-    sample_idx0 = 0
-    entries = track.stsc
-    entry_idx = 0
-    if not sizes:
-        return
-    for chunk_idx1, chunk_off in enumerate(track.chunk_offsets, start=1):
-        while (entry_idx + 1) < len(entries) and chunk_idx1 >= entries[entry_idx + 1][0]:
-            entry_idx += 1
-        samples_per_chunk = entries[entry_idx][1]
-        off = int(chunk_off)
-        for _ in range(samples_per_chunk):
-            if sample_idx0 >= len(sizes):
-                return
-            sz = int(sizes[sample_idx0])
-            yield sample_idx0 + 1, off, sz
-            off += sz
-            sample_idx0 += 1
-
-
-def _mp4_extract_h264_annexb(in_path: str, out_path: str, *, repeat_headers: bool = True) -> None:
-    moov = _mp4_load_moov(in_path)
-    track = _mp4_pick_h264_video_track(moov)
-    start_code = b"\x00\x00\x00\x01"
-    spspps = b"".join(start_code + s for s in track.sps_list) + b"".join(start_code + p for p in track.pps_list)
-    if not spspps:
-        raise ValueError("MP4: missing SPS/PPS in avcC")
-
-    with open(in_path, "rb") as fin, open(out_path, "wb") as fout:
-        fout.write(spspps)
-        nls = int(track.nal_len_size)
-        if nls not in (1, 2, 3, 4):
-            raise ValueError(f"MP4: unsupported NAL length size: {nls}")
-        sync = track.sync_samples
-        for sample_no, off, sz in _mp4_iter_sample_locations(track):
-            if repeat_headers and sync is not None and sample_no in sync:
-                fout.write(spspps)
-            fin.seek(off, os.SEEK_SET)
-            data = fin.read(sz)
-            if len(data) != sz:
-                raise ValueError("MP4: truncated sample read")
-            pos = 0
-            end = len(data)
-            while pos + nls <= end:
-                nal_len = int.from_bytes(data[pos:pos + nls], "big")
-                pos += nls
-                if nal_len <= 0:
-                    continue
-                if pos + nal_len > end:
-                    raise ValueError("MP4: invalid NAL length in sample")
-                fout.write(start_code)
-                fout.write(data[pos:pos + nal_len])
-                pos += nal_len
-
-
-def build_command_packet_header(a0: int) -> bytearray:
+    Returns:
+        500-byte packet with header fields populated
+    """
     packet = bytearray(500)
-    packet[0] = a0
-    packet[2] = 0x1A
-    packet[3] = 0x6D
+    packet[0] = cmd_id
+    packet[2] = 0x1A  # Magic byte 1
+    packet[3] = 0x6D  # Magic byte 2
     timestamp = int((time.time() - time.mktime(time.localtime()[:3] + (0, 0, 0, 0, 0, -1))) * 1000)
     packet[4:8] = struct.pack('<I', timestamp)
     return packet
 
 
 def encrypt_with_des(key: bytes, data: bytes) -> bytes:
+    """Encrypt data using DES-CBC."""
     cipher = DES.new(key, DES.MODE_CBC, key)
     padded_len = (len(data) + 7) // 8 * 8
     padded_data = data.ljust(padded_len, b'\x00')
@@ -449,57 +130,128 @@ def encrypt_with_des(key: bytes, data: bytes) -> bytes:
 
 
 def encrypt_command_packet(data: bytearray) -> bytearray:
-    des_key = b'slv3tuzx'
-    encrypted = encrypt_with_des(des_key, data)
+    """Encrypt a command packet for transmission.
+
+    Returns:
+        512-byte encrypted packet with trailer bytes
+    """
+    encrypted = encrypt_with_des(DES_KEY, bytes(data))
     final_packet = bytearray(512)
     final_packet[:len(encrypted)] = encrypted
-    final_packet[510] = 161
-    final_packet[511] = 26
+    final_packet[510] = 0xA1  # Trailer byte 1
+    final_packet[511] = 0x1A  # Trailer byte 2
     return final_packet
 
 
-def find_usb_device():
-    dev = None
-    dev_pid = None
-    for pid in PRODUCT_ID.keys():
-        try:
-            dev = usb.core.find(idVendor=VENDOR_ID, idProduct=pid)
-        except usb.core.NoBackendError as e:
-            print("""[ERROR] %s: libusb could not be loaded from your system. Make sure it is installed.
-On Linux and BSD, these will generally be available on the distribution's official repositories.
-On macOS, libusb 1.0 can easily be installed through Homebrew: brew install libusb
-On Windows, manually copy 'external/libusb-1.0/libusb-1.0.dll' to C:\\Windows\\System32""" % str(
-                e))
-            try:
-                sys.exit(0)
-            except:
-                os._exit(0)
-
-        dev_pid = pid
-        if dev is not None:
-            break
-    if dev is None:
-        raise ValueError(f'USB device not found')
-
+def _configure_device(dev):
+    """Configure a USB device for communication."""
     try:
         dev.set_configuration()
-    except usb.core.USBError as e:
-        print("Warning: set_configuration() failed:", e)
+    except usb.core.USBError as exc:
+        logger.warning("set_configuration() failed: %s", exc)
 
     if platform.system() == "Linux":
         try:
             if dev.is_kernel_driver_active(0):
                 dev.detach_kernel_driver(0)
-        except usb.core.USBError as e:
-            print("Warning: detach_kernel_driver failed:", e)
+        except usb.core.USBError as exc:
+            logger.warning("detach_kernel_driver failed: %s", exc)
 
-    return dev, dev_pid
+    return dev
+
+
+def get_device_serial(dev) -> str:
+    """Get the serial number for a device, or fallback to bus:address."""
+    try:
+        serial = dev.serial_number
+        if serial:
+            return serial
+    except (usb.core.USBError, ValueError):
+        pass
+    return f"bus{dev.bus:03d}:{dev.address:03d}"
+
+
+def find_all_usb_devices() -> list:
+    """Find all connected Turing Smart Screen devices, sorted by serial number."""
+    devices = usb.core.find(idVendor=VENDOR_ID, idProduct=PRODUCT_ID, find_all=True)
+    if devices is None:
+        return []
+    device_list = list(devices)
+    device_list.sort(key=get_device_serial)
+    return device_list
+
+
+def find_usb_device(device_selector=None):
+    """Find a USB device, optionally by index or serial number.
+
+    Args:
+        device_selector: None for first device, int for index, str for serial match
+
+    Returns:
+        Configured USB device
+
+    Raises:
+        ValueError: If no device found or selector doesn't match
+    """
+    devices = find_all_usb_devices()
+
+    if not devices:
+        raise ValueError("No Turing Smart Screen devices found")
+
+    if device_selector is None:
+        return _configure_device(devices[0])
+
+    if isinstance(device_selector, int):
+        if device_selector < 0 or device_selector >= len(devices):
+            raise ValueError(
+                f"Device index {device_selector} out of range (0-{len(devices) - 1})"
+            )
+        return _configure_device(devices[device_selector])
+
+    # Select by serial number (full or partial match)
+    serial_str = str(device_selector)
+    matches = []
+    for dev in devices:
+        dev_serial = get_device_serial(dev)
+        if dev_serial == serial_str:
+            return _configure_device(dev)
+        if dev_serial.startswith(serial_str):
+            matches.append(dev)
+
+    if len(matches) == 1:
+        return _configure_device(matches[0])
+    if len(matches) > 1:
+        serials = [get_device_serial(d) for d in matches]
+        raise ValueError(
+            f"Ambiguous serial prefix '{serial_str}' matches: {', '.join(serials)}"
+        )
+
+    raise ValueError(f"No device found matching '{serial_str}'")
+
+
+def list_usb_devices() -> None:
+    """List all connected Turing Smart Screen devices."""
+    devices = find_all_usb_devices()
+
+    if not devices:
+        print("No Turing Smart Screen devices found.")
+        return
+
+    print(f"{'Index':<6} {'Serial':<18} {'Bus:Addr':<10} {'Product':<10}")
+    print("-" * 50)
+
+    for idx, dev in enumerate(devices):
+        serial = get_device_serial(dev)
+        bus_addr = f"{dev.bus:03d}:{dev.address:03d}"
+        try:
+            product = dev.product or "Unknown"
+        except (usb.core.USBError, ValueError):
+            product = "Unknown"
+        print(f"{idx:<6} {serial:<18} {bus_addr:<10} {product:<10}")
 
 
 def read_flush(ep_in, max_attempts=5):
-    """
-    Flush the USB IN endpoint by reading available data until timeout or max attempts reached.
-    """
+    """Flush the USB IN endpoint by reading available data until timeout."""
     for _ in range(max_attempts):
         try:
             ep_in.read(512, timeout=100)
@@ -507,69 +259,108 @@ def read_flush(ep_in, max_attempts=5):
             if e.errno == 110 or e.args[0] == 'Operation timed out':
                 break
             else:
-                # print("Flush read error:", e)
                 break
 
 
-def write_to_device(dev, data, timeout=2000):
+def write_to_device(dev, data, timeout=USB_WRITE_TIMEOUT, retries=USB_RETRY_COUNT):
+    """Write data to USB device with retry logic.
+
+    Args:
+        dev: USB device
+        data: Data to write
+        timeout: Timeout in ms
+        retries: Number of retry attempts for transient errors
+
+    Returns:
+        Response bytes or None on failure
+    """
     cfg = dev.get_active_configuration()
     intf = usb.util.find_descriptor(cfg, bInterfaceNumber=0)
     if intf is None:
-        raise RuntimeError("USB interface 0 not found")
-    ep_out = usb.util.find_descriptor(intf, custom_match=lambda e: usb.util.endpoint_direction(
-        e.bEndpointAddress) == usb.util.ENDPOINT_OUT)
-    ep_in = usb.util.find_descriptor(intf, custom_match=lambda e: usb.util.endpoint_direction(
-        e.bEndpointAddress) == usb.util.ENDPOINT_IN)
-    assert ep_out is not None and ep_in is not None, "Could not find USB endpoints"
-
-    try:
-        ep_out.write(data, timeout)
-    except usb.core.USBError as e:
-        print("USB write error:", e)
+        logger.error("USB interface 0 not found")
         return None
 
-    try:
-        response = ep_in.read(512, timeout)
-        read_flush(ep_in)
-        return bytes(response)
-    except usb.core.USBError as e:
-        print("USB read error:", e)
+    ep_out = usb.util.find_descriptor(
+        intf,
+        custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_OUT
+    )
+    ep_in = usb.util.find_descriptor(
+        intf,
+        custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN
+    )
+
+    if ep_out is None or ep_in is None:
+        logger.error("Could not find USB endpoints")
         return None
+
+    last_error = None
+    for attempt in range(retries):
+        try:
+            ep_out.write(data, timeout)
+            response = ep_in.read(512, timeout)
+            read_flush(ep_in)
+            return bytes(response)
+        except usb.core.USBError as e:
+            last_error = e
+            # Check for transient "Resource busy" errors
+            if "Resource busy" in str(e) or e.errno == 16:
+                if attempt < retries - 1:
+                    logger.debug("USB busy, retrying in %.1fs (attempt %d/%d)",
+                                USB_RETRY_DELAY, attempt + 1, retries)
+                    time.sleep(USB_RETRY_DELAY)
+                    continue
+            logger.error("USB error: %s", e)
+            return None
+
+    logger.error("USB operation failed after %d retries: %s", retries, last_error)
+    return None
 
 
 def delay_sync(dev):
+    """Send sync command with delay."""
     send_sync_command(dev)
     time.sleep(0.2)
 
 
 def send_sync_command(dev):
-    print("Sending Sync Command (ID 10)...")
-    cmd_packet = build_command_packet_header(10)
+    """Send sync command (ID 10)."""
+    logger.debug("Sending Sync Command (ID %d)", CMD_SYNC)
+    cmd_packet = build_command_packet_header(CMD_SYNC)
     return write_to_device(dev, encrypt_command_packet(cmd_packet))
 
 
 def send_restart_device_command(dev):
-    print("Sending Restart Command (ID 11)...")
-    return write_to_device(dev, encrypt_command_packet(build_command_packet_header(11)))
+    """Send restart command (ID 11)."""
+    logger.info("Sending Restart Command (ID %d)", CMD_RESTART)
+    return write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_RESTART)))
 
 
 def send_brightness_command(dev, brightness: int):
-    print(f"Sending Brightness Command (ID 14)...")
-    print(f"  Brightness = {brightness}")
-    cmd_packet = build_command_packet_header(14)
+    """Send brightness command (ID 14).
+
+    Args:
+        brightness: Brightness level (0-102 internal scale)
+    """
+    logger.debug("Setting brightness to %d", brightness)
+    cmd_packet = build_command_packet_header(CMD_BRIGHTNESS)
     cmd_packet[8] = brightness
     return write_to_device(dev, encrypt_command_packet(cmd_packet))
 
 
 def send_frame_rate_command(dev, frame_rate: int):
-    print(f"Sending Frame Rate Command (ID 15)...")
-    print(f"  Frame Rate = {frame_rate}")
-    cmd_packet = build_command_packet_header(15)
+    """Send frame rate command (ID 15).
+
+    Args:
+        frame_rate: Frame rate in FPS
+    """
+    logger.debug("Setting frame rate to %d fps", frame_rate)
+    cmd_packet = build_command_packet_header(CMD_FRAME_RATE)
     cmd_packet[8] = frame_rate
     return write_to_device(dev, encrypt_command_packet(cmd_packet))
 
 
 def format_bytes(val):
+    """Format byte count as human-readable string."""
     if val > 1024 * 1024:
         return f"{val / (1024 * 1024):.2f} GB"
     else:
@@ -577,27 +368,25 @@ def format_bytes(val):
 
 
 def send_refresh_storage_command(dev):
-    print("Sending Refresh Storage Command (ID 100)...")
-    response = write_to_device(dev, encrypt_command_packet(build_command_packet_header(100)))
+    """Send refresh storage command (ID 100) and log storage info."""
+    logger.info("Refreshing storage info")
+    response = write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_REFRESH_STORAGE)))
 
-    total = format_bytes(int.from_bytes(response[8:12], byteorder='little'))
-    used = format_bytes(int.from_bytes(response[12:16], byteorder='little'))
-    valid = format_bytes(int.from_bytes(response[16:20], byteorder='little'))
-
-    print(f"  Card Total = {total}")
-    print(f"  Card Used = {used}")
-    print(f"  Card Valid = {valid}")
+    if response:
+        total = format_bytes(int.from_bytes(response[8:12], byteorder='little'))
+        used = format_bytes(int.from_bytes(response[12:16], byteorder='little'))
+        valid = format_bytes(int.from_bytes(response[16:20], byteorder='little'))
+        logger.info("Storage - Total: %s, Used: %s, Valid: %s", total, used, valid)
 
 
 def send_save_settings_command(dev, brightness=0, startup=0, reserved=0, rotation=0, sleep=0, offline=0):
-    print("Sending Save Settings Command (ID 125)...")
-    print(f"  Brightness:     {brightness}")
-    print(f"  Startup Mode:   {startup}")
-    print(f"  Reserved:       {reserved}")
-    print(f"  Rotation:       {rotation}")
-    print(f"  Sleep Timeout:  {sleep}")
-    print(f"  Offline Mode:   {offline}")
-    cmd_packet = build_command_packet_header(125)
+    """Send save settings command (ID 125).
+
+    Note: Rotation setting only affects static images, NOT video playback.
+    """
+    logger.info("Saving settings: brightness=%d, rotation=%d, sleep=%d, offline=%d",
+               brightness, rotation, sleep, offline)
+    cmd_packet = build_command_packet_header(CMD_SAVE_SETTINGS)
     cmd_packet[8] = brightness
     cmd_packet[9] = startup
     cmd_packet[10] = reserved
@@ -608,9 +397,18 @@ def send_save_settings_command(dev, brightness=0, startup=0, reserved=0, rotatio
 
 
 def send_image(dev, png_data: bytes):
-    img_size = len(png_data)
+    """Send PNG image data to display (ID 102).
 
-    cmd_packet = build_command_packet_header(CMD_UPLOAD_PNG)
+    Args:
+        png_data: Raw PNG file bytes
+
+    Returns:
+        Response from device or None on failure
+    """
+    img_size = len(png_data)
+    logger.debug("Sending image: %d bytes", img_size)
+
+    cmd_packet = build_command_packet_header(CMD_SEND_IMAGE)
     cmd_packet[8] = (img_size >> 24) & 0xFF
     cmd_packet[9] = (img_size >> 16) & 0xFF
     cmd_packet[10] = (img_size >> 8) & 0xFF
@@ -621,20 +419,21 @@ def send_image(dev, png_data: bytes):
 
 
 def clear_image(dev):
+    """Send a blank/clear image to the display."""
     img_data = bytearray(
         [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00,
-         0x01, 0xe0, 0x00, 0x00, 0x07, 0x80, 0x08, 0x06, 0x00, 0x00, 0x00, 0x16, 0xf0, 0x84, 0xf5, 0x00, 0x00, 0x00,
-         0x01, 0x73, 0x52, 0x47, 0x42, 0x00, 0xae, 0xce, 0x1c, 0xe9, 0x00, 0x00, 0x00, 0x04, 0x67, 0x41, 0x4d, 0x41,
-         0x00, 0x00, 0xb1, 0x8f, 0x0b, 0xfc, 0x61, 0x05, 0x00, 0x00, 0x00, 0x09, 0x70, 0x48, 0x59, 0x73, 0x00, 0x00,
-         0x0e, 0xc3, 0x00, 0x00, 0x0e, 0xc3, 0x01, 0xc7, 0x6f, 0xa8, 0x64, 0x00, 0x00, 0x0e, 0x0c, 0x49, 0x44, 0x41,
-         0x54, 0x78, 0x5e, 0xed, 0xc1, 0x01, 0x0d, 0x00, 0x00, 0x00, 0xc2, 0xa0, 0xf7, 0x4f, 0x6d, 0x0f, 0x07, 0x14,
-         0x00, 0x00, 0x00, 0x00, ] + [0x00] * 3568 + [0x00, 0xf0, 0x66, 0x4a, 0xc8, 0x00, 0x01, 0x11, 0x9d, 0x82, 0x0a,
-                                                      0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60,
-                                                      0x82])
-    img_size = len(img_data)
-    print(f"  Chunk Size: {img_size} bytes")
+            0x01, 0xe0, 0x00, 0x00, 0x07, 0x80, 0x08, 0x06, 0x00, 0x00, 0x00, 0x16, 0xf0, 0x84, 0xf5, 0x00, 0x00, 0x00,
+            0x01, 0x73, 0x52, 0x47, 0x42, 0x00, 0xae, 0xce, 0x1c, 0xe9, 0x00, 0x00, 0x00, 0x04, 0x67, 0x41, 0x4d, 0x41,
+            0x00, 0x00, 0xb1, 0x8f, 0x0b, 0xfc, 0x61, 0x05, 0x00, 0x00, 0x00, 0x09, 0x70, 0x48, 0x59, 0x73, 0x00, 0x00,
+            0x0e, 0xc3, 0x00, 0x00, 0x0e, 0xc3, 0x01, 0xc7, 0x6f, 0xa8, 0x64, 0x00, 0x00, 0x0e, 0x0c, 0x49, 0x44, 0x41,
+            0x54, 0x78, 0x5e, 0xed, 0xc1, 0x01, 0x0d, 0x00, 0x00, 0x00, 0xc2, 0xa0, 0xf7, 0x4f, 0x6d, 0x0f, 0x07, 0x14,
+            0x00, 0x00, 0x00, 0x00, ] + [0x00] * 3568 + [0x00, 0xf0, 0x66, 0x4a, 0xc8, 0x00, 0x01, 0x11, 0x9d, 0x82,
+            0x0a, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82])
 
-    cmd_packet = build_command_packet_header(102)
+    logger.debug("Clearing display")
+    img_size = len(img_data)
+
+    cmd_packet = build_command_packet_header(CMD_SEND_IMAGE)
     cmd_packet[8] = (img_size >> 24) & 0xFF
     cmd_packet[9] = (img_size >> 16) & 0xFF
     cmd_packet[10] = (img_size >> 8) & 0xFF
@@ -644,334 +443,583 @@ def clear_image(dev):
     return write_to_device(dev, full_payload)
 
 
+# Track delay command count to reduce log spam
+_delay_count = 0
+_delay_batch_size = 50
+
+
 def delay(dev, rst):
+    """Send delay command (ID 122) and wait for device ready.
+
+    Logs are batched to reduce spam.
+    """
+    global _delay_count
     time.sleep(0.05)
-    print("Sending Delay Command (ID 122)...")
-    cmd_packet = build_command_packet_header(122)
+
+    _delay_count += 1
+    if _delay_count == 1 or _delay_count % _delay_batch_size == 0:
+        logger.debug("Sending delay commands (count: %d)", _delay_count)
+
+    cmd_packet = build_command_packet_header(CMD_DELAY)
     response = write_to_device(dev, encrypt_command_packet(cmd_packet))
-    if response and len(response) > 8 and response[8] > rst:
+    if response and response[8] > rst:
         delay(dev, rst)
 
 
-def extract_h264_from_mp4(mp4_path: str):
+def reset_delay_counter():
+    """Reset the delay command counter (call at start of video loop)."""
+    global _delay_count
+    _delay_count = 0
+
+
+def _probe_video(video_path: str) -> dict:
+    """Probe video file with ffprobe to get format info.
+
+    Args:
+        video_path: Path to video file
+
+    Returns:
+        Dict with video info (width, height, codec, profile, fps) or empty dict on error
+    """
+    try:
+        cmd = [
+            "ffprobe", "-v", "quiet",
+            "-print_format", "json",
+            "-show_streams",
+            str(video_path)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        data = json.loads(result.stdout)
+
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") == "video":
+                # Parse frame rate (can be "25/1" format)
+                fps_str = stream.get("r_frame_rate", "0/1")
+                if "/" in fps_str:
+                    num, den = fps_str.split("/")
+                    fps = float(num) / float(den) if float(den) > 0 else 0
+                else:
+                    fps = float(fps_str)
+
+                return {
+                    "width": stream.get("width", 0),
+                    "height": stream.get("height", 0),
+                    "codec": stream.get("codec_name", ""),
+                    "profile": stream.get("profile", "").lower(),
+                    "fps": fps,
+                }
+        return {}
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as e:
+        logger.warning("Failed to probe video: %s", e)
+        return {}
+
+
+def validate_video(video_path: str) -> list:
+    """Validate video file for compatibility with Turing display.
+
+    Args:
+        video_path: Path to video file
+
+    Returns:
+        List of warning messages (empty if all OK)
+    """
+    warnings = []
+    info = _probe_video(video_path)
+
+    if not info:
+        warnings.append(f"Could not probe video: {video_path}")
+        return warnings
+
+    # Check resolution
+    if info["width"] != DISPLAY_WIDTH or info["height"] != DISPLAY_HEIGHT:
+        warnings.append(
+            f"Video resolution {info['width']}x{info['height']} differs from display {DISPLAY_WIDTH}x{DISPLAY_HEIGHT}"
+        )
+
+    # Check codec
+    if info["codec"] != "h264":
+        warnings.append(f"Video codec '{info['codec']}' is not H.264 - may not play correctly")
+
+    # Check profile - baseline required
+    if info["profile"] and "baseline" not in info["profile"]:
+        warnings.append(
+            f"Video profile '{info['profile']}' is not baseline - may cause artifacts. "
+            "Re-encode with: ffmpeg -i input.mp4 -profile:v baseline -r 25 -bf 0 output.mp4"
+        )
+
+    # Check frame rate
+    if info["fps"] and abs(info["fps"] - DISPLAY_FPS) > 1:
+        warnings.append(f"Video frame rate {info['fps']:.1f} fps differs from display {DISPLAY_FPS} fps")
+
+    return warnings
+
+
+def _get_video_cache_path(input_path: Path, rotate_180: bool) -> Path:
+    """Get cache path for processed H.264 file.
+
+    Args:
+        input_path: Original MP4 path
+        rotate_180: Whether rotation is applied
+
+    Returns:
+        Path to cached H.264 file
+    """
+    _ensure_cache_dir()
+    suffix = "_rotated" if rotate_180 else ""
+    return CACHE_DIR / f"{input_path.stem}{suffix}.h264"
+
+
+def _is_cache_valid(input_path: Path, cache_path: Path) -> bool:
+    """Check if cached file is valid (exists and newer than source).
+
+    Args:
+        input_path: Source file
+        cache_path: Cached file
+
+    Returns:
+        True if cache is valid and can be used
+    """
+    if not cache_path.exists():
+        return False
+
+    source_mtime = input_path.stat().st_mtime
+    cache_mtime = cache_path.stat().st_mtime
+
+    return cache_mtime > source_mtime
+
+
+def extract_h264_from_mp4(mp4_path: str, rotate_180: bool = False) -> Path:
+    """Extract/convert MP4 to raw H.264 Annex B format.
+
+    Uses smart caching - only re-extracts if source is newer than cache.
+
+    Args:
+        mp4_path: Path to input MP4 file
+        rotate_180: If True, apply 180-degree rotation with ffmpeg
+
+    Returns:
+        Path to H.264 file
+
+    Raises:
+        FileNotFoundError: If input file doesn't exist
+        subprocess.CalledProcessError: If ffmpeg fails
+    """
     input_path = Path(mp4_path)
     if not input_path.exists():
-        raise FileNotFoundError(f"Input file not found: {input_path}")
+        raise FileNotFoundError(f"Video file not found: {input_path}")
 
-    output_path = input_path.with_suffix(".h264")
-    if output_path.exists():
-        print(f"{output_path.name} already exists. Skipping extraction.")
+    output_path = _get_video_cache_path(input_path, rotate_180)
+
+    # Check cache validity
+    if _is_cache_valid(input_path, output_path):
+        logger.debug("Using cached H.264: %s", output_path.name)
         return output_path
 
-    # Prefer ffmpeg when available (fast + robust). Fall back to pure-Python MP4->Annex-B extraction.
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg:
-        cmd = [ffmpeg, "-y", "-i", str(input_path), "-c:v", "copy", "-bsf:v", "h264_mp4toannexb", "-an", "-f", "h264",
-            str(output_path), ]
-        print(f"Extracting H.264 from {input_path.name} with ffmpeg...")
-        subprocess.run(cmd, check=True)
-        print(f"Done. Saved as {output_path.name}")
-        return output_path
+    # Validate source video
+    warnings = validate_video(str(input_path))
+    for warning in warnings:
+        logger.warning(warning)
 
-    print(f"ffmpeg not found; extracting H.264 from {input_path.name} with built-in MP4 parser...")
-    _mp4_extract_h264_annexb(str(input_path), str(output_path), repeat_headers=True)
-    print(f"Done. Saved as {output_path.name}")
+    if rotate_180:
+        # Re-encode with rotation and baseline profile
+        # CRITICAL: Must use baseline profile, NOT high (causes green artifacts)
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(input_path),
+            "-vf", "hflip,vflip",
+            "-c:v", "libx264",
+            "-profile:v", "baseline",
+            "-pix_fmt", "yuv420p",
+            "-color_range", "tv",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-r", str(DISPLAY_FPS),
+            "-bf", "0",  # No B-frames
+            "-b:v", "5000k",
+            "-preset", "slow",
+            "-an",  # Strip audio
+            "-bsf:v", "h264_mp4toannexb",
+            "-f", "h264",
+            str(output_path)
+        ]
+        logger.info("Extracting and rotating H.264 from %s...", input_path.name)
+    else:
+        # Just extract H.264 stream (assumes already properly encoded)
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(input_path),
+            "-c:v", "copy",
+            "-bsf:v", "h264_mp4toannexb",
+            "-an",
+            "-f", "h264",
+            str(output_path)
+        ]
+        logger.info("Extracting H.264 from %s...", input_path.name)
+
+    subprocess.run(cmd, check=True, capture_output=True)
+    logger.info("Saved H.264 cache: %s", output_path.name)
     return output_path
 
 
 def send_video(dev, video_path, loop=False):
+    """Send video to device (legacy function).
+
+    For new code, use LcdCommTuringUSB.show_video() instead.
+    """
     output_path = extract_h264_from_mp4(video_path)
+    write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_111)))
+    write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_112)))
+    write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_13)))
+    send_brightness_command(dev, 32)
+    write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_41)))
+    clear_image(dev)
+    send_frame_rate_command(dev, DISPLAY_FPS)
 
-    write_to_device(dev, encrypt_command_packet(build_command_packet_header(111)))
-    write_to_device(dev, encrypt_command_packet(build_command_packet_header(112)))
-    write_to_device(dev, encrypt_command_packet(build_command_packet_header(13)))
-    send_brightness_command(dev, 32)  # 14
-    write_to_device(dev, encrypt_command_packet(build_command_packet_header(41)))
-    clear_image(dev)  # 102
-    send_frame_rate_command(dev, 25)  # 15
-
-    # Negotiate chunk size if supported
-    resp = write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_GET_H264_CHUNK_SIZE)))
-    chunk_size = 202752
-    try:
-        if resp and len(resp) >= 12:
-            negotiated = int.from_bytes(resp[8:12], byteorder="big", signed=False)
-            if 0 < negotiated <= 1024 * 1024:
-                chunk_size = negotiated
-    except Exception:
-        pass
-
-    print("Sending Send Video Command (ID 121)...")
+    logger.info("Streaming video...")
     try:
         while True:
-            with open(output_path, "rb") as f:
+            reset_delay_counter()
+            with open(output_path, 'rb') as f:
                 while True:
-                    data = f.read(chunk_size)
+                    data = f.read(VIDEO_CHUNK_SIZE)
                     if not data:
                         break
 
                     chunksize = len(data)
-                    is_last = f.tell() == os.path.getsize(output_path)
-
-                    cmd_packet = build_command_packet_header(CMD_PLAY_H264_CHUNK)
+                    cmd_packet = build_command_packet_header(CMD_SEND_VIDEO_CHUNK)
                     cmd_packet[8] = (chunksize >> 24) & 0xFF
                     cmd_packet[9] = (chunksize >> 16) & 0xFF
                     cmd_packet[10] = (chunksize >> 8) & 0xFF
                     cmd_packet[11] = chunksize & 0xFF
-                    if is_last:
-                        cmd_packet[12] = 1
 
                     full_payload = encrypt_command_packet(cmd_packet) + data
                     response = write_to_device(dev, full_payload)
-
-                    # Flow control (queue depth is usually reported in response[8] to cmd 122)
-                    if response is None:
+                    time.sleep(0.03)
+                    if response is None or len(response) < 9 or response[8] <= 3:
                         delay(dev, 2)
-                    else:
-                        # Poll stream status when queue is high
-                        st = write_to_device(dev,
-                                             encrypt_command_packet(build_command_packet_header(CMD_GET_STREAM_STATUS)))
-                        if st and len(st) > 8 and st[8] > 3:
-                            delay(dev, 2)
 
-            print("Video sent successfully.")
+            logger.debug("Video loop complete")
             if not loop:
                 break
     except KeyboardInterrupt:
-        print("\nLoop interrupted by user. Sending reset...")
+        logger.info("Video interrupted by user")
     finally:
-        write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_STOP_STREAM)))
+        write_to_device(dev, encrypt_command_packet(build_command_packet_header(CMD_VIDEO_STOP)))
 
 
 def _encode_png(image: Image.Image) -> bytes:
+    """Encode PIL Image to PNG bytes with maximum compression."""
     buffer = BytesIO()
     image.save(buffer, format="PNG", compress_level=9)
     return buffer.getvalue()
 
 
+def compress_image(image: Image.Image, ratio: float) -> Image.Image:
+    """Compress image by reducing and restoring resolution."""
+    width, height = image.size
+    image = image.resize(
+        (int(width * ratio * 0.5), int(height * ratio * 0.5)),
+        resample=Image.Resampling.LANCZOS  # type: ignore[attr-defined]
+    )
+    image = image.resize((width, height))
+    return image
+
+
+def validate_image(image_path: str) -> list:
+    """Validate image file for compatibility with Turing display.
+
+    Args:
+        image_path: Path to image file
+
+    Returns:
+        List of warning messages (empty if all OK)
+    """
+    warnings = []
+    path = Path(image_path)
+
+    if not path.exists():
+        warnings.append(f"Image file not found: {image_path}")
+        return warnings
+
+    try:
+        with Image.open(path) as img:
+            width, height = img.size
+            if (width, height) != (DISPLAY_WIDTH, DISPLAY_HEIGHT):
+                warnings.append(
+                    f"Image resolution {width}x{height} differs from display {DISPLAY_WIDTH}x{DISPLAY_HEIGHT}"
+                )
+    except Exception as e:
+        warnings.append(f"Could not open image: {e}")
+
+    return warnings
+
+
+def send_layered_image(dev, image_path: str, max_chunk_bytes: int = IMAGE_LAYER_MAX_BYTES) -> bool:
+    """Send image using layered approach for large images (>512KB).
+
+    Images larger than max_chunk_bytes are split into vertical layers
+    and sent from bottom to top.
+
+    Args:
+        dev: USB device
+        image_path: Path to PNG image
+        max_chunk_bytes: Maximum bytes per layer
+
+    Returns:
+        True if successful, False on error
+    """
+    # Validate first
+    warnings = validate_image(image_path)
+    for warning in warnings:
+        logger.warning(warning)
+
+    try:
+        with Image.open(image_path) as img:
+            img = img.convert("RGBA")
+            width, height = img.size
+
+            total_size = len(_encode_png(img))
+            num_layers = math.ceil(total_size / max_chunk_bytes)
+            logger.info("Image size: %d bytes -> %d layer(s)", total_size, num_layers)
+
+            if num_layers == 1:
+                encoded = _encode_png(img)
+                return send_image(dev, encoded) is not None
+
+            h = height // num_layers
+            results = []
+
+            for i in range(num_layers):
+                y_start = max(0, height - (i + 1) * h)
+                visible_part = img.crop((0, y_start, width, height - h * i))
+                canvas_height = height - i * h
+                layer_img = Image.new("RGBA", (width, canvas_height), (0, 0, 0, 0))  # type: ignore[arg-type]
+                layer_img.paste(visible_part, (0, y_start))
+
+                logger.info("Sending layer %d/%d (%dx%d)", i + 1, num_layers, width, canvas_height)
+                encoded = _encode_png(layer_img)
+                result = send_image(dev, encoded)
+                results.append(result is not None)
+
+            return all(results)
+    except Exception as exc:
+        logger.error("Failed to send image: %s", exc)
+        return False
+
+
 def upload_file(dev, file_path: str) -> bool:
+    """Upload file to device storage."""
     local_path = Path(file_path)
     if not local_path.exists():
-        logger.error("Error: File does not exist: %s", file_path)
+        logger.error("File not found: %s", file_path)
         return False
 
     ext = local_path.suffix.lower()
     if ext == ".png":
         device_path = f"/tmp/sdcard/mmcblk0p1/img/{local_path.name}"
-        logger.info("Uploading PNG: %s → %s", file_path, device_path)
+        logger.info("Uploading PNG: %s -> %s", file_path, device_path)
     elif ext == ".mp4":
         h264_path = extract_h264_from_mp4(file_path)
         device_path = f"/tmp/sdcard/mmcblk0p1/video/{h264_path.name}"
-        local_path = h264_path  # Update local path to .h264
-        logger.info("Uploading MP4 as H264: %s → %s", local_path, device_path)
+        local_path = h264_path
+        logger.info("Uploading MP4 as H264: %s -> %s", local_path, device_path)
     else:
-        logger.error("Error: Unsupported file type. Only .png and .mp4 are allowed.")
+        logger.error("Unsupported file type '%s'. Only .png and .mp4 are supported.", ext)
         return False
 
     if not _open_file_command(dev, device_path):
-        logger.error("Failed to open remote file for writing.")
+        logger.error("Failed to open remote file for writing")
         return False
 
     if not _write_file_command(dev, str(local_path)):
-        logger.error("Failed to write file data.")
+        logger.error("Failed to write file data")
         return False
 
-    logger.info("Upload completed successfully.")
+    logger.info("Upload completed: %s", device_path)
     return True
 
 
 def _open_file_command(dev, path: str):
-    logger.info("Opening remote file: %s", path)
+    """Open remote file for writing (ID 38)."""
+    logger.debug("Opening remote file: %s", path)
 
     path_bytes = path.encode("ascii")
     length = len(path_bytes)
 
-    packet = build_command_packet_header(38)
-
+    packet = build_command_packet_header(CMD_OPEN_FILE)
     packet[8] = (length >> 24) & 0xFF
     packet[9] = (length >> 16) & 0xFF
     packet[10] = (length >> 8) & 0xFF
     packet[11] = length & 0xFF
     packet[12:16] = b"\x00\x00\x00\x00"
-    packet[16: 16 + length] = path_bytes
+    packet[16:16 + length] = path_bytes
 
     return write_to_device(dev, encrypt_command_packet(packet))
 
 
 def _delete_command(dev, file_path: str):
-    logger.info("Deleting remote file: %s", file_path)
+    """Delete remote file (ID 40)."""
+    logger.debug("Deleting remote file: %s", file_path)
 
     path_bytes = file_path.encode("ascii")
     length = len(path_bytes)
 
-    packet = build_command_packet_header(40)
+    packet = build_command_packet_header(CMD_DELETE_FILE)
     packet[8] = (length >> 24) & 0xFF
     packet[9] = (length >> 16) & 0xFF
     packet[10] = (length >> 8) & 0xFF
     packet[11] = length & 0xFF
     packet[12:16] = b"\x00\x00\x00\x00"
-    packet[16: 16 + length] = path_bytes
+    packet[16:16 + length] = path_bytes
 
     return write_to_device(dev, encrypt_command_packet(packet))
 
 
 def _play_command(dev, file_path: str):
-    logger.info("Requesting playback for: %s", file_path)
+    """Request playback (ID 98)."""
+    logger.debug("Requesting playback: %s", file_path)
 
     path_bytes = file_path.encode("ascii")
     length = len(path_bytes)
 
-    packet = build_command_packet_header(98)
-
+    packet = build_command_packet_header(CMD_PLAY)
     packet[8] = (length >> 24) & 0xFF
     packet[9] = (length >> 16) & 0xFF
     packet[10] = (length >> 8) & 0xFF
     packet[11] = length & 0xFF
     packet[12:16] = b"\x00\x00\x00\x00"
-    packet[16: 16 + length] = path_bytes
+    packet[16:16 + length] = path_bytes
 
     return write_to_device(dev, encrypt_command_packet(packet))
 
 
 def _play2_command(dev, file_path: str):
-    logger.info("Requesting alternate playback for: %s", file_path)
+    """Request alternate playback (ID 110)."""
+    logger.debug("Requesting alternate playback: %s", file_path)
 
     path_bytes = file_path.encode("ascii")
     length = len(path_bytes)
 
-    packet = build_command_packet_header(110)
-
+    packet = build_command_packet_header(CMD_PLAY_ALT)
     packet[8] = (length >> 24) & 0xFF
     packet[9] = (length >> 16) & 0xFF
     packet[10] = (length >> 8) & 0xFF
     packet[11] = length & 0xFF
     packet[12:16] = b"\x00\x00\x00\x00"
-    packet[16: 16 + length] = path_bytes
+    packet[16:16 + length] = path_bytes
 
     return write_to_device(dev, encrypt_command_packet(packet))
 
 
 def _play3_command(dev, file_path: str):
-    logger.info("Requesting image playback for: %s", file_path)
+    """Request image playback (ID 113)."""
+    logger.debug("Requesting image playback: %s", file_path)
 
     path_bytes = file_path.encode("ascii")
     length = len(path_bytes)
 
-    packet = build_command_packet_header(113)
-
+    packet = build_command_packet_header(CMD_PLAY_IMAGE)
     packet[8] = (length >> 24) & 0xFF
     packet[9] = (length >> 16) & 0xFF
     packet[10] = (length >> 8) & 0xFF
     packet[11] = length & 0xFF
     packet[12:16] = b"\x00\x00\x00\x00"
-    packet[16: 16 + length] = path_bytes
+    packet[16:16 + length] = path_bytes
 
     return write_to_device(dev, encrypt_command_packet(packet))
 
 
 def _write_file_command(dev, file_path: str) -> bool:
-    logger.info("Writing remote file from: %s", file_path)
+    """Write file data to device (ID 39)."""
+    logger.debug("Writing file: %s", file_path)
 
     try:
-        total_size = Path(file_path).stat().st_size
-        sent = 0
-        chunk_index = 0
-
-        preferred_cap = min(1024 * 1024, MAX_CHUNK_BYTES)
-
         with open(file_path, "rb") as fh:
+            chunk_index = 0
             while True:
-                data_chunk = fh.read(preferred_cap)
+                data_chunk = fh.read(VIDEO_CHUNK_SIZE)
                 if not data_chunk:
                     break
 
+                chunk_size = len(data_chunk)
                 chunk_index += 1
-                chunk_len = len(data_chunk)
-                sent += chunk_len
-                is_last = sent >= total_size
+                logger.debug("Writing chunk %d: %d bytes", chunk_index, chunk_size)
 
-                # [8..11]=chunk_capacity, [12..15]=chunk_len, [16]=last_flag, payload=chunk
-                cmd_packet = build_command_packet_header(39)
-                cap = preferred_cap
-                cmd_packet[8] = (cap >> 24) & 0xFF
-                cmd_packet[9] = (cap >> 16) & 0xFF
-                cmd_packet[10] = (cap >> 8) & 0xFF
-                cmd_packet[11] = cap & 0xFF
-                cmd_packet[12] = (chunk_len >> 24) & 0xFF
-                cmd_packet[13] = (chunk_len >> 16) & 0xFF
-                cmd_packet[14] = (chunk_len >> 8) & 0xFF
-                cmd_packet[15] = chunk_len & 0xFF
-                if is_last:
-                    cmd_packet[16] = 1
+                cmd_packet = build_command_packet_header(CMD_WRITE_FILE)
+                cmd_packet[8] = (chunk_size >> 24) & 0xFF
+                cmd_packet[9] = (chunk_size >> 16) & 0xFF
+                cmd_packet[10] = (chunk_size >> 8) & 0xFF
+                cmd_packet[11] = chunk_size & 0xFF
 
                 response = write_to_device(dev, encrypt_command_packet(cmd_packet) + data_chunk)
-
-                # Fallback: legacy layout uses [8..11]=chunk_len only
-                if response is None or (not _resp_ok(response)):
-                    legacy_packet = build_command_packet_header(39)
-                    legacy_packet[8] = (chunk_len >> 24) & 0xFF
-                    legacy_packet[9] = (chunk_len >> 16) & 0xFF
-                    legacy_packet[10] = (chunk_len >> 8) & 0xFF
-                    legacy_packet[11] = chunk_len & 0xFF
-                    response = write_to_device(dev, encrypt_command_packet(legacy_packet) + data_chunk)
-
                 if response is None:
-                    logger.error("Write command failed at chunk %d", chunk_index)
+                    logger.error("Write failed at chunk %d", chunk_index)
                     return False
 
-        logger.info("File write completed successfully (%d chunks).", chunk_index)
+        logger.info("File write complete (%d chunks)", chunk_index)
         return True
     except FileNotFoundError:
         logger.error("File not found: %s", file_path)
         return False
     except Exception as exc:
-        logger.error("Error writing file: %s", exc)
+        logger.error("Failed to write file: %s", exc)
         return False
 
 
-# This class is for Turing Smart Screen newer models (4.6" / 5.2" / 8" / 8.8" HW rev 1.x / 9.2" / 12.3")
-# These models are not detected as serial ports but as (Win)USB devices
 class LcdCommTuringUSB(LcdComm):
-    def __init__(self, com_port: str = "AUTO", display_width: int = 480, display_height: int = 1920,
-                 update_queue: Optional[queue.Queue] = None):
+    """LCD communication class for Turing Smart Screen USB models (5.2" / 8" / 8.8" HW rev 1.x / 9.2").
+
+    These models are detected as USB devices, not serial ports.
+    """
+
+    def __init__(self, com_port: str = "AUTO", display_width: int = DISPLAY_WIDTH,
+                 display_height: int = DISPLAY_HEIGHT, update_queue: Optional[queue.Queue] = None,
+                 device_selector=None):
         super().__init__(com_port, display_width, display_height, update_queue)
-        self.dev, self.dev_pid = find_usb_device()
-        self.display_width, self.display_height = PRODUCT_ID[self.dev_pid]
-        # Store the current screen state as an image that will be continuously updated and sent
-        self.current_state = Image.new("RGBA", (self.get_width(), self.get_height()), (0, 0, 0, 0))
+        self.device_selector = device_selector
+        self.dev = find_usb_device(device_selector)
+        self.current_state = Image.new("RGBA", (self.get_width(), self.get_height()), (0, 0, 0, 0))  # type: ignore[arg-type]
 
     def InitializeComm(self):
+        """Initialize communication with device."""
         send_sync_command(self.dev)
 
     def Reset(self):
-        # Do not enable the reset command for now on Turing USB models
-        # send_restart_device_command(self.dev)
+        """Reset device (currently disabled for USB models)."""
         pass
 
     def Clear(self):
+        """Clear the display."""
         clear_image(self.dev)
 
     def ScreenOff(self):
-        # Turing USB models do not implement a "screen off" command (that we know of): use SetBrightness(0) instead
+        """Turn screen off (clear + zero brightness)."""
         self.Clear()
         self.SetBrightness(0)
 
     def ScreenOn(self):
-        # Turing USB models do not implement a "screen off" command (that we know of): using SetBrightness() instead
+        """Turn screen on (restore brightness)."""
         self.SetBrightness()
 
     def SetBrightness(self, level: int = 25):
-        assert 0 <= level <= 100, 'Brightness level must be [0-100]'
+        """Set display brightness.
+
+        Args:
+            level: Brightness 0-100
+        """
+        assert 0 <= level <= 100, 'Brightness must be 0-100'
         converted = int(level / 100 * 102)
         send_brightness_command(self.dev, converted)
 
     def SetOrientation(self, orientation: Orientation):
+        """Set display orientation."""
         self.orientation = orientation
-        # Recreate new state with correct width/height now that screen orientation has changed
-        self.current_state = Image.new("RGBA", (self.get_width(), self.get_height()), (0, 0, 0, 0))
+        self.current_state = Image.new("RGBA", (self.get_width(), self.get_height()), (0, 0, 0, 0))  # type: ignore[arg-type]
 
-    def DisplayPILImage(self, image: Image.Image, x: int = 0, y: int = 0, image_width: int = 0, image_height: int = 0):
-        # If the image height/width isn't provided, use the native image size
+    def DisplayPILImage(self, image: Image.Image, x: int = 0, y: int = 0,
+                        image_width: int = 0, image_height: int = 0):
+        """Display a PIL image at the specified position."""
         if not image_height:
             image_height = image.size[1]
         if not image_width:
@@ -985,18 +1033,132 @@ class LcdCommTuringUSB(LcdComm):
         if image_width != image.size[0] or image_height != image.size[1]:
             image = image.crop((0, 0, image_width, image_height))
 
-        # Paste new image over existing screen state
         self.current_state.paste(image, (x, y))
 
-        # Rotate image before sending to screen: all images sent to the screen are in portrait mode
+        # Rotate based on orientation
         if self.orientation == Orientation.LANDSCAPE:
-            base_image = self.current_state.transpose(Image.Transpose.ROTATE_270)
+            base_image = self.current_state.transpose(Image.Transpose.ROTATE_270)  # type: ignore[attr-defined]
         elif self.orientation == Orientation.REVERSE_LANDSCAPE:
-            base_image = self.current_state.transpose(Image.Transpose.ROTATE_90)
+            base_image = self.current_state.transpose(Image.Transpose.ROTATE_90)  # type: ignore[attr-defined]
         elif self.orientation == Orientation.PORTRAIT:
-            base_image = self.current_state.transpose(Image.Transpose.ROTATE_180)
-        else:  # Orientation.REVERSE_PORTRAIT is initial screen orientation
+            base_image = self.current_state.transpose(Image.Transpose.ROTATE_180)  # type: ignore[attr-defined]
+        else:  # REVERSE_PORTRAIT is native orientation
             base_image = self.current_state
 
-        # Send image data (auto JPEG fallback when payload exceeds device limit)
-        send_pil_image_auto(self.dev, base_image, max_bytes=MAX_IMAGE_PAYLOAD_DEFAULT)
+        encoded = _encode_png(base_image)
+        send_image(self.dev, encoded)
+
+    def _video_setup(self, brightness: int, output_path: Union[str, Path]):
+        """Send USB setup commands for video playback.
+
+        Args:
+            brightness: Display brightness (0-100)
+            output_path: Path to H.264 file (logged for diagnostics)
+        """
+        write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_111)))
+        write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_112)))
+        write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_13)))
+        send_brightness_command(self.dev, int(brightness / 100 * 102))
+        write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_41)))
+        clear_image(self.dev)
+        send_frame_rate_command(self.dev, DISPLAY_FPS)
+
+    def show_video(self, video_path: str, stop_event: threading.Event,
+                   brightness: int = 32, rotate_180: bool = False,
+                   restart_minutes=None, reinit_minutes=None):
+        """Stream H.264 video in a continuous loop.
+
+        Args:
+            video_path: Path to MP4 file (will be converted to H.264)
+            stop_event: Threading event to signal stop
+            brightness: Display brightness (0-100)
+            rotate_180: If True, rotate video 180 degrees via ffmpeg
+                       (device rotation does NOT work for video)
+            restart_minutes: Soft restart interval — reopen file, restart loop
+            reinit_minutes: Hard restart interval — re-send USB setup commands
+        """
+        # Extract/convert with rotation if needed
+        output_path = extract_h264_from_mp4(video_path, rotate_180=rotate_180)
+
+        # Initial video setup
+        self._video_setup(brightness, output_path)
+
+        logger.info("Starting video: %s", video_path)
+
+        restart_seconds = restart_minutes * 60 if restart_minutes else None
+        reinit_seconds = reinit_minutes * 60 if reinit_minutes else None
+        last_restart = time.time()
+        last_reinit = time.time()
+
+        try:
+            while not stop_event.is_set():
+                now = time.time()
+
+                # Check reinit first (takes precedence, subsumes soft restart)
+                if reinit_seconds and (now - last_reinit) >= reinit_seconds:
+                    logger.info("Periodic reinit triggered after %s minutes", reinit_minutes)
+                    self.stop_video()
+                    self._video_setup(brightness, output_path)
+                    last_reinit = now
+                    last_restart = now  # reset soft timer too
+
+                reset_delay_counter()
+                with open(output_path, 'rb') as f:
+                    while not stop_event.is_set():
+                        data = f.read(VIDEO_CHUNK_SIZE)
+                        if not data:
+                            break
+
+                        chunksize = len(data)
+                        cmd_packet = build_command_packet_header(CMD_SEND_VIDEO_CHUNK)
+                        cmd_packet[8] = (chunksize >> 24) & 0xFF
+                        cmd_packet[9] = (chunksize >> 16) & 0xFF
+                        cmd_packet[10] = (chunksize >> 8) & 0xFF
+                        cmd_packet[11] = chunksize & 0xFF
+
+                        full_payload = encrypt_command_packet(cmd_packet) + data
+                        response = write_to_device(self.dev, full_payload)
+                        time.sleep(0.03)
+
+                        if response is None or len(response) < 9 or response[8] <= 3:
+                            delay(self.dev, 2)
+
+                        # Check soft restart timer
+                        if restart_seconds and (time.time() - last_restart) >= restart_seconds:
+                            logger.info("Periodic restart triggered after %s minutes", restart_minutes)
+                            last_restart = time.time()
+                            break  # break inner loop; outer loop reopens file
+
+                logger.debug("Video loop complete, restarting...")
+
+        except Exception as e:
+            logger.error("Video playback error: %s", e)
+        finally:
+            logger.info("Video stopped")
+
+    def stop_video(self):
+        """Stop video playback."""
+        logger.info("Stopping video")
+        write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_111)))
+        write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_UNKNOWN_112)))
+        write_to_device(self.dev, encrypt_command_packet(build_command_packet_header(CMD_VIDEO_STOP)))
+
+    def show_image(self, image_path: str) -> bool:
+        """Display a static image.
+
+        Automatically uses layered sending for large images (>512KB).
+
+        Args:
+            image_path: Path to PNG file
+
+        Returns:
+            True if successful, False on error
+        """
+        path = Path(image_path)
+        if not path.exists():
+            logger.error("Image not found: %s", image_path)
+            return False
+
+        logger.info("Showing image: %s", image_path)
+        return send_layered_image(self.dev, str(path))
+
