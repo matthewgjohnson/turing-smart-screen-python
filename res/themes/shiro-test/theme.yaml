@@ -1,0 +1,658 @@
+# Shiro Test Theme - Large font diagnostic display
+---
+display:
+  DISPLAY_SIZE: 8.8"
+  DISPLAY_ORIENTATION: landscape
+
+static_images:
+  BACKGROUND:
+    PATH: background.png
+    X: 0
+    Y: 0
+    WIDTH: 1920
+    HEIGHT: 480
+
+static_text:
+  # GPU0 Labels (Column 1: X=0-479)
+  GPU0_TITLE:
+    TEXT: "GPU0"
+    X: 10
+    Y: 5
+    FONT: roboto-mono/RobotoMono-Bold.ttf
+    FONT_SIZE: 28
+    FONT_COLOR: 0, 0, 0
+  GPU0_TEMP_LBL:
+    TEXT: "Temp:"
+    X: 10
+    Y: 45
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU0_FAN_LBL:
+    TEXT: "Fan:"
+    X: 10
+    Y: 85
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU0_LOAD_LBL:
+    TEXT: "Load:"
+    X: 10
+    Y: 125
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU0_POWER_LBL:
+    TEXT: "Power:"
+    X: 10
+    Y: 165
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU0_VRAM_LBL:
+    TEXT: "VRAM:"
+    X: 10
+    Y: 205
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU0_PSTATE_LBL:
+    TEXT: "Pstate:"
+    X: 10
+    Y: 245
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+
+  # GPU1 Labels (Column 2: X=480-959)
+  GPU1_TITLE:
+    TEXT: "GPU1"
+    X: 490
+    Y: 5
+    FONT: roboto-mono/RobotoMono-Bold.ttf
+    FONT_SIZE: 28
+    FONT_COLOR: 0, 0, 0
+  GPU1_TEMP_LBL:
+    TEXT: "Temp:"
+    X: 490
+    Y: 45
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU1_FAN_LBL:
+    TEXT: "Fan:"
+    X: 490
+    Y: 85
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU1_LOAD_LBL:
+    TEXT: "Load:"
+    X: 490
+    Y: 125
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU1_POWER_LBL:
+    TEXT: "Power:"
+    X: 490
+    Y: 165
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU1_VRAM_LBL:
+    TEXT: "VRAM:"
+    X: 490
+    Y: 205
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU1_PSTATE_LBL:
+    TEXT: "Pstate:"
+    X: 490
+    Y: 245
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+
+  # CPU Labels (Column 3: X=960-1439)
+  CPU_TITLE:
+    TEXT: "CPU"
+    X: 970
+    Y: 5
+    FONT: roboto-mono/RobotoMono-Bold.ttf
+    FONT_SIZE: 28
+    FONT_COLOR: 0, 0, 0
+  CPU_TEMP_LBL:
+    TEXT: "Temp:"
+    X: 970
+    Y: 45
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  CPU_POWER_LBL:
+    TEXT: "Power:"
+    X: 970
+    Y: 85
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  CPU_PUMP_LBL:
+    TEXT: "Pump:"
+    X: 970
+    Y: 125
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  CPU_RAD_LBL:
+    TEXT: "Rad:"
+    X: 970
+    Y: 165
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  CPU_REAR_LBL:
+    TEXT: "Rear:"
+    X: 970
+    Y: 205
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  CPU_INTAKE_LBL:
+    TEXT: "Intake:"
+    X: 970
+    Y: 245
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+
+  # Bandwidth Labels (Column 4: X=1440-1919)
+  BW_TITLE:
+    TEXT: "BANDWIDTH"
+    X: 1450
+    Y: 5
+    FONT: roboto-mono/RobotoMono-Bold.ttf
+    FONT_SIZE: 28
+    FONT_COLOR: 0, 0, 0
+  BW_GPURX_LBL:
+    TEXT: "GPU Rx:"
+    X: 1450
+    Y: 45
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  BW_GPUTX_LBL:
+    TEXT: "GPU Tx:"
+    X: 1450
+    Y: 85
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  BW_SSDRD_LBL:
+    TEXT: "SSD Rd:"
+    X: 1450
+    Y: 125
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  BW_SSDWR_LBL:
+    TEXT: "SSD Wr:"
+    X: 1450
+    Y: 165
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  BW_NETRX_LBL:
+    TEXT: "Net Rx:"
+    X: 1450
+    Y: 205
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  BW_NETTX_LBL:
+    TEXT: "Net Tx:"
+    X: 1450
+    Y: 245
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+
+  # Row 2 labels (bottom half)
+  GPU0_TMAX_LBL:
+    TEXT: "TMax:"
+    X: 10
+    Y: 295
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU0_PMAX_LBL:
+    TEXT: "PMax:"
+    X: 10
+    Y: 335
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU0_VMAX_LBL:
+    TEXT: "VMax:"
+    X: 10
+    Y: 375
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU0_SWPC_LBL:
+    TEXT: "SwPC:"
+    X: 10
+    Y: 415
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+
+  GPU1_TMAX_LBL:
+    TEXT: "TMax:"
+    X: 490
+    Y: 295
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU1_PMAX_LBL:
+    TEXT: "PMax:"
+    X: 490
+    Y: 335
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU1_VMAX_LBL:
+    TEXT: "VMax:"
+    X: 490
+    Y: 375
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  GPU1_SWPC_LBL:
+    TEXT: "SwPC:"
+    X: 490
+    Y: 415
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+
+  BW_RAM_LBL:
+    TEXT: "RAM:"
+    X: 1450
+    Y: 295
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+  BW_SSD_LBL:
+    TEXT: "SSD:"
+    X: 1450
+    Y: 335
+    FONT: roboto-mono/RobotoMono-Regular.ttf
+    FONT_SIZE: 24
+    FONT_COLOR: 0, 0, 0
+
+STATS:
+  CUSTOM:
+    INTERVAL: 1
+
+    # GPU0 Values
+    Gpu0_Temp:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 45
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_Fan:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 85
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_Load:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 125
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_Power:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 165
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_Vram:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 205
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_Pstate:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 245
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_TempMax:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 295
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_PowerMax:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 335
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_VramMax:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 375
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu0_SwPowerCap:
+      TEXT:
+        SHOW: True
+        X: 180
+        Y: 415
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+
+    # GPU1 Values
+    Gpu1_Temp:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 45
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_Fan:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 85
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_Load:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 125
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_Power:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 165
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_Vram:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 205
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_Pstate:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 245
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_TempMax:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 295
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_PowerMax:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 335
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_VramMax:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 375
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Gpu1_SwPowerCap:
+      TEXT:
+        SHOW: True
+        X: 660
+        Y: 415
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+
+    # CPU Values
+    Cpu_Temp:
+      TEXT:
+        SHOW: True
+        X: 1140
+        Y: 45
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Cpu_Power:
+      TEXT:
+        SHOW: True
+        X: 1140
+        Y: 85
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Cpu_Pump:
+      TEXT:
+        SHOW: True
+        X: 1140
+        Y: 125
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Cpu_Rad:
+      TEXT:
+        SHOW: True
+        X: 1140
+        Y: 165
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Cpu_Rear:
+      TEXT:
+        SHOW: True
+        X: 1140
+        Y: 205
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Cpu_Intake:
+      TEXT:
+        SHOW: True
+        X: 1140
+        Y: 245
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+
+    # Bandwidth Values
+    Bw_GpuRx:
+      TEXT:
+        SHOW: True
+        X: 1680
+        Y: 45
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Bw_GpuTx:
+      TEXT:
+        SHOW: True
+        X: 1680
+        Y: 85
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Bw_SsdRead:
+      TEXT:
+        SHOW: True
+        X: 1680
+        Y: 125
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Bw_SsdWrite:
+      TEXT:
+        SHOW: True
+        X: 1680
+        Y: 165
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Bw_NetRx:
+      TEXT:
+        SHOW: True
+        X: 1680
+        Y: 205
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Bw_NetTx:
+      TEXT:
+        SHOW: True
+        X: 1680
+        Y: 245
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Bw_RamUsed:
+      TEXT:
+        SHOW: True
+        X: 1680
+        Y: 295
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+    Bw_SsdUsed:
+      TEXT:
+        SHOW: True
+        X: 1680
+        Y: 335
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 24
+        FONT_COLOR: 0, 0, 0
+
+    # Conditional Status Indicators (Phase 5)
+    # GPU0 State - shows ACTIVE/IDLE based on P-state
+    Gpu0_StateFlag:
+      TEXT:
+        SHOW: True
+        X: 20
+        Y: 440
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 16
+        FONT_COLOR: 255, 255, 255
+        PADDING: 4, 12
+        BACKGROUND_COLOR: 136, 136, 136
+        CASE:
+          - WHEN: "Gpu0_Pstate != 'P8'"
+            TEXT: "ACTIVE"
+            BACKGROUND_COLOR: 0, 0, 0
+          - ELSE: true
+            TEXT: "IDLE"
+
+    # GPU0 Temperature indicator - color coded
+    Gpu0_TempFlag:
+      TEXT:
+        SHOW: True
+        X: 100
+        Y: 440
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 16
+        FONT_COLOR: 255, 255, 255
+        PADDING: 4, 12
+        CASE:
+          - WHEN: "Gpu0_Temp >= 85"
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 208, 2, 27
+          - WHEN: "Gpu0_Temp >= 70"
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 245, 166, 35
+          - ELSE: true
+            TEXT: "TEMP"
+            BACKGROUND_COLOR: 46, 204, 113
+
+    # GPU0 Power indicator - shows when power capped
+    Gpu0_PowerFlag:
+      TEXT:
+        SHOW: True
+        X: 175
+        Y: 440
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 16
+        FONT_COLOR: 255, 255, 255
+        PADDING: 4, 12
+        CASE:
+          - WHEN: "Gpu0_SwPowerCap == 'Active'"
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 208, 2, 27
+          - WHEN: "Gpu0_Power >= 500"
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 245, 166, 35
+          - ELSE: true
+            TEXT: "POWER"
+            BACKGROUND_COLOR: 46, 204, 113
+
+    # GPU0 Cooling indicator - warns when GPU working but fan off
+    Gpu0_CoolFlag:
+      TEXT:
+        SHOW: True
+        X: 260
+        Y: 440
+        FONT: roboto-mono/RobotoMono-Bold.ttf
+        FONT_SIZE: 16
+        FONT_COLOR: 255, 255, 255
+        PADDING: 4, 12
+        CASE:
+          - WHEN: "Gpu0_Fan == 0 and Gpu0_Pstate != 'P8'"
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 208, 2, 27
+          - WHEN: "Gpu0_Fan >= 90"
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 245, 166, 35
+          - ELSE: true
+            TEXT: "COOL"
+            BACKGROUND_COLOR: 46, 204, 113
